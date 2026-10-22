@@ -1,0 +1,476 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "exposure-response",
+    "title": "Exposure Response: Contain Before Cleanup",
+    "subtitle": "Respond to a fictional Git secret-scanner finding using the priority that matches the credential state.",
+    "role": "Service owner responding to a finding",
+    "estimatedMinutes": 7,
+    "difficulty": "Challenge"
+  },
+  "mission": {
+    "eyebrow": "Mission 04 · Exposure response",
+    "objective": "Reduce immediate credential risk first, verify the resulting state, then complete tracking and repository cleanup in the right order.",
+    "activeLabel": "Response active",
+    "clearLabel": "Contained",
+    "riskSignals": [
+      {
+        "id": "credential-usable",
+        "label": "Credential may still be usable",
+        "initial": "open"
+      },
+      {
+        "id": "replacement",
+        "label": "Replacement not verified",
+        "initial": "open"
+      },
+      {
+        "id": "tracking",
+        "label": "Finding not documented",
+        "initial": "open"
+      },
+      {
+        "id": "history",
+        "label": "Repository history still contains exposed value",
+        "initial": "open"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "contain-first",
+        "icon": "✓",
+        "title": "Containment first",
+        "description": "Completed the response without putting repository cleanup ahead of credential containment.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      },
+      {
+        "id": "response-streak",
+        "icon": "◆",
+        "title": "Response streak",
+        "description": "Reached a review streak of at least two decisions.",
+        "condition": {
+          "type": "best-streak-at-least",
+          "value": 2
+        }
+      },
+      {
+        "id": "recall-priority",
+        "icon": "↺",
+        "title": "Priority recalled",
+        "description": "Recognized the containment-first principle when it reappeared later in the incident.",
+        "condition": {
+          "type": "retrieval-wins-at-least",
+          "value": 1
+        }
+      }
+    ]
+  },
+  "brief": {
+    "role": "You own a fictional service after a secret scanner reports a credential in Git history.",
+    "context": "The mission randomly presents an active or already-inactive credential case. Read the evidence carefully: the right response depends on whether the credential can still be used, but repository cleanup never substitutes for credential containment.",
+    "safetyNote": "Training data only. Every credential-looking value is fictional. Never replace a placeholder with a real credential in this simulation, an AI tool, a ticket, chat, email, log, screenshot or support message."
+  },
+  "workspace": {
+    "title": "Security finding · checkout-service",
+    "status": "Finding triage in progress"
+  },
+  "initialState": {
+    "credentialStatus": "active",
+    "contained": false,
+    "responseComplete": false
+  },
+  "files": [
+    {
+      "id": "finding",
+      "path": "scanner/finding.txt",
+      "language": "text",
+      "badge": "alert",
+      "initialVersion": "active",
+      "versions": {
+        "active": "Finding: credential-like value detected in Git history\nRepository: checkout-service\nCommit: synthetic-training-commit\nScenario status: service owner confirms the credential is still active\nValue: [REDACTED TRAINING PLACEHOLDER]",
+        "inactive": "Finding: credential-like value detected in Git history\nRepository: checkout-service\nCommit: synthetic-training-commit\nScenario status: service owner confirms the credential was already revoked before this finding\nValue: [REDACTED TRAINING PLACEHOLDER]"
+      }
+    },
+    {
+      "id": "response-log",
+      "path": "response/status.txt",
+      "language": "text",
+      "badge": "status",
+      "hidden": true,
+      "initialVersion": "active-before",
+      "versions": {
+        "active-before": "Old credential status: ACTIVE\nReplacement status: NOT VERIFIED\nRepository cleanup: NOT STARTED",
+        "active-after": "Old credential status: DISABLED\nReplacement status: VERIFIED\nFinding tracking: UPDATED\nRepository cleanup: READY TO SCHEDULE",
+        "inactive-after": "Credential status: VERIFIED INACTIVE\nFinding tracking: UPDATED\nRepository cleanup: READY TO SCHEDULE"
+      }
+    },
+    {
+      "id": "chat",
+      "path": "team-message.txt",
+      "language": "text",
+      "badge": "message",
+      "hidden": true,
+      "content": "Teammate: I can rewrite the history now so the finding disappears. We can deal with the credential after the branch cleanup finishes."
+    }
+  ],
+  "variants": [
+    {
+      "id": "active",
+      "fileVersions": {
+        "finding": "active",
+        "response-log": "active-before"
+      },
+      "initialState": {
+        "credentialStatus": "active",
+        "contained": false
+      },
+      "briefOverride": {
+        "context": "The scanner finding is confirmed active in this mission. Reduce the time the credential remains usable, then complete the rest of the response."
+      },
+      "stageOverrides": {
+        "first-action": {
+          "correctIds": [
+            "contain"
+          ],
+          "choices": [
+            {
+              "id": "cleanup",
+              "label": "Rewrite Git history first so the value disappears from the repository",
+              "feedback": "History cleanup does not invalidate a credential that may already have been copied. Do not delay containment of an active credential."
+            },
+            {
+              "id": "contain",
+              "label": "Rotate, revoke or disable the active credential through the approved process",
+              "detail": "Then verify the replacement and affected consumers before cleanup."
+            },
+            {
+              "id": "wait",
+              "label": "Wait for the normal rotation schedule",
+              "feedback": "A confirmed active exposure requires event-driven response rather than waiting for a routine schedule."
+            }
+          ]
+        },
+        "response-sequence": {
+          "items": [
+            {
+              "id": "disable",
+              "text": "Rotate, revoke or disable the exposed credential through the approved process"
+            },
+            {
+              "id": "verify",
+              "text": "Verify the replacement and affected consumers"
+            },
+            {
+              "id": "document",
+              "text": "Document the remediation and update the approved finding workflow"
+            },
+            {
+              "id": "cleanup",
+              "text": "Clean Git history and unnecessary branches after the credential is inactive"
+            }
+          ],
+          "correctOrder": [
+            "disable",
+            "verify",
+            "document",
+            "cleanup"
+          ]
+        }
+      }
+    },
+    {
+      "id": "inactive",
+      "fileVersions": {
+        "finding": "inactive",
+        "response-log": "inactive-after"
+      },
+      "initialState": {
+        "credentialStatus": "inactive",
+        "contained": true
+      },
+      "missionOverride": {
+        "riskSignals": [
+          {
+            "id": "credential-usable",
+            "label": "Credential may still be usable",
+            "initial": "resolved"
+          },
+          {
+            "id": "replacement",
+            "label": "Inactive status not verified",
+            "initial": "open"
+          },
+          {
+            "id": "tracking",
+            "label": "Finding not documented",
+            "initial": "open"
+          },
+          {
+            "id": "history",
+            "label": "Repository history still contains exposed value",
+            "initial": "open"
+          }
+        ]
+      },
+      "briefOverride": {
+        "context": "The service owner says the credential was already revoked before the scanner finding. Verify that status, complete tracking and clean the repository without pretending that deletion itself is revocation."
+      },
+      "stageOverrides": {
+        "first-action": {
+          "correctIds": [
+            "verify-inactive"
+          ],
+          "choices": [
+            {
+              "id": "delete-only",
+              "label": "Delete the commit and close the finding",
+              "feedback": "Deleting repository history does not prove that the credential is inactive."
+            },
+            {
+              "id": "verify-inactive",
+              "label": "Verify that the credential is inactive, then document the finding and proceed with cleanup",
+              "detail": "The scenario already indicates prior revocation; verify rather than re-exposing the value."
+            },
+            {
+              "id": "paste-ticket",
+              "label": "Paste the credential into a ticket so another team can test it",
+              "feedback": "Never move a suspected credential into a ticket to seek validation."
+            }
+          ]
+        },
+        "response-sequence": {
+          "items": [
+            {
+              "id": "verify",
+              "text": "Verify that the credential is inactive"
+            },
+            {
+              "id": "document",
+              "text": "Document the status and update the approved finding workflow"
+            },
+            {
+              "id": "cleanup",
+              "text": "Clean Git history and unnecessary branches when feasible"
+            }
+          ],
+          "correctOrder": [
+            "verify",
+            "document",
+            "cleanup"
+          ],
+          "onCorrect": {
+            "resolveSignals": [
+              "credential-usable",
+              "replacement",
+              "tracking",
+              "history"
+            ],
+            "unlockFiles": [
+              "chat"
+            ],
+            "fileVersions": {
+              "response-log": "inactive-after"
+            },
+            "setState": {
+              "contained": true,
+              "responseComplete": true
+            },
+            "workspaceStatus": "Credential response complete · reinforcement check remains"
+          }
+        }
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "first-action",
+      "type": "single-choice",
+      "typeLabel": "Triage",
+      "title": "Choose the first response action",
+      "instruction": "Use the scanner evidence and scenario status. Select the action that reduces risk without copying the credential into another system.",
+      "visibleFiles": [
+        "finding"
+      ],
+      "focusFile": "finding",
+      "correctIds": [
+        "contain"
+      ],
+      "choices": [],
+      "concept": {
+        "id": "contain-before-cleanup",
+        "label": "Make an active exposed credential unusable before repository cleanup"
+      },
+      "hints": [
+        "A repository edit changes where the value appears. Ask whether it changes whether the credential can be used."
+      ],
+      "feedback": {
+        "correct": "The first action matches the credential state in this scenario and does not confuse repository cleanup with credential containment.",
+        "incorrect": "That action either delays containment, skips status verification or creates another exposure path."
+      },
+      "onCorrect": {
+        "unlockFiles": [
+          "response-log"
+        ],
+        "workspaceStatus": "First response action accepted"
+      }
+    },
+    {
+      "id": "response-sequence",
+      "type": "sequence",
+      "typeLabel": "Sequence",
+      "title": "Put the remaining response actions in the safest order",
+      "instruction": "Arrange the actions so that immediate risk reduction and verification happen before repository cleanup.",
+      "visibleFiles": [
+        "finding",
+        "response-log"
+      ],
+      "focusFile": "response-log",
+      "items": [],
+      "correctOrder": [],
+      "hints": [
+        "Repository cleanup matters, but it should not be allowed to delay credential containment or status verification."
+      ],
+      "feedback": {
+        "correct": "The sequence protects the credential boundary first, then completes evidence, tracking and repository cleanup.",
+        "incorrect": "The order puts a later cleanup or tracking action ahead of the credential state that needs to be contained or verified."
+      },
+      "feedbackByFirst": {
+        "cleanup": "History cleanup does not make an active credential unusable and does not verify that an inactive credential is truly inactive."
+      },
+      "onCorrect": {
+        "resolveSignals": [
+          "credential-usable",
+          "replacement",
+          "tracking",
+          "history"
+        ],
+        "unlockFiles": [
+          "chat"
+        ],
+        "fileVersions": {
+          "response-log": "active-after"
+        },
+        "setState": {
+          "contained": true,
+          "responseComplete": true
+        },
+        "workspaceStatus": "Credential response complete · reinforcement check remains"
+      }
+    },
+    {
+      "id": "verify-response",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Check the simulated credential state",
+      "instruction": "Use system evidence, not repository appearance, to confirm the response result.",
+      "visibleFiles": [
+        "finding",
+        "response-log",
+        "chat"
+      ],
+      "focusFile": "response-log",
+      "runPrompt": "Run the simulated credential and tracking checks.",
+      "checks": [
+        {
+          "label": "Credential status",
+          "results": [
+            {
+              "when": {
+                "key": "contained",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The simulated credential is inactive or verified inactive."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The credential state is not contained."
+            }
+          ]
+        },
+        {
+          "label": "Finding tracking",
+          "results": [
+            {
+              "when": {
+                "key": "responseComplete",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The simulated response status is ready for approved tracking and cleanup."
+            },
+            {
+              "default": true,
+              "status": "warn",
+              "message": "Response tracking is incomplete."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "passed": "The evidence supports the response state. One teammate message still tests whether you can preserve the same priority under pressure."
+      }
+    },
+    {
+      "id": "priority-recall",
+      "type": "single-choice",
+      "typeLabel": "Recall",
+      "title": "Respond to the cleanup-first suggestion",
+      "instruction": "Choose the best response to the teammate message.",
+      "visibleFiles": [
+        "chat",
+        "response-log"
+      ],
+      "focusFile": "chat",
+      "correctIds": [
+        "priority"
+      ],
+      "choices": [
+        {
+          "id": "agree",
+          "label": "Agree and finish history rewriting before addressing credential status",
+          "feedback": "Repository cleanup cannot replace credential containment or status verification."
+        },
+        {
+          "id": "priority",
+          "label": "Keep credential containment or verified inactivity as the priority, then complete history cleanup",
+          "detail": "Do not let repository appearance drive the security response order."
+        },
+        {
+          "id": "ignore",
+          "label": "Ignore repository cleanup permanently because the credential has been handled",
+          "feedback": "Cleanup still matters after the credential risk is contained; it simply does not come first."
+        }
+      ],
+      "concept": {
+        "id": "contain-before-cleanup",
+        "label": "Credential containment comes before repository cleanup",
+        "retrieval": true
+      },
+      "hints": [
+        "The principle should stay the same even when a teammate is focused on making the finding disappear."
+      ],
+      "feedback": {
+        "correct": "You preserved the response priority when the same misconception reappeared in a team message.",
+        "incorrect": "The response either puts cleanup too early or dismisses cleanup entirely."
+      }
+    }
+  ],
+  "completion": {
+    "title": "Exposure response contained",
+    "message": "You used the credential state to choose the right first action, kept repository cleanup in its proper place and reinforced the priority when it reappeared later in the workflow.",
+    "takeaways": [
+      "A scanner finding is a signal to investigate; this mission tells you whether the simulated credential is active or already inactive.",
+      "For an active exposed credential, make it unusable before history cleanup.",
+      "For an already-inactive credential, verify the status, document it and then clean repository history when feasible.",
+      "Never copy a suspected credential into tickets, chat or AI tools to seek validation."
+    ]
+  },
+  "sourceBasis": [
+    "Course Draft — Lesson 4 exposure response and rotation sequence",
+    "Course Outline — active versus inactive Git finding guidance"
+  ]
+}

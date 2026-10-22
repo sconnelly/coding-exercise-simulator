@@ -1,0 +1,383 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "release-gate",
+    "title": "Release Gate: Stop the Secret From Shipping",
+    "subtitle": "Review a fictional checkout-service merge request, correct the exposure paths and verify the result.",
+    "role": "Merge request reviewer",
+    "estimatedMinutes": 7,
+    "difficulty": "Applied"
+  },
+  "mission": {
+    "eyebrow": "Mission 01 · Release gate",
+    "objective": "Clear the checkout change for merge without leaving a credential in source, tracked configuration, browser-visible code or diagnostic output.",
+    "activeLabel": "Blocked",
+    "clearLabel": "Cleared",
+    "riskSignals": [
+      {
+        "id": "source",
+        "label": "Credential in source",
+        "initial": "open"
+      },
+      {
+        "id": "tracked-config",
+        "label": "Tracked secret-bearing configuration",
+        "initial": "open"
+      },
+      {
+        "id": "client",
+        "label": "Client-visible credential",
+        "initial": "open"
+      },
+      {
+        "id": "output",
+        "label": "Credential in diagnostic output",
+        "initial": "open"
+      },
+      {
+        "id": "retrieval",
+        "label": "Runtime retrieval not corrected",
+        "initial": "open"
+      },
+      {
+        "id": "regression",
+        "label": "Regression in test helper",
+        "initial": "dormant"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "clean-review",
+        "icon": "◆",
+        "title": "Clean review",
+        "description": "Completed the mission without using a hint.",
+        "condition": {
+          "type": "no-hints"
+        }
+      },
+      {
+        "id": "pattern-spotter",
+        "icon": "↺",
+        "title": "Pattern spotter",
+        "description": "Recognized a previously practised secret-output pattern in a new artifact.",
+        "condition": {
+          "type": "retrieval-wins-at-least",
+          "value": 1
+        }
+      },
+      {
+        "id": "release-cleared",
+        "icon": "✓",
+        "title": "Release cleared",
+        "description": "Resolved every open risk signal in the mission.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      }
+    ]
+  },
+  "brief": {
+    "role": "You are reviewing a TypeScript/Node.js merge request for a fictional checkout service.",
+    "context": "The change touches application code, browser configuration and a local environment file. A later test helper also introduces a familiar secret-output mistake. Inspect the whole change, request a safe correction and verify that the risk did not simply move elsewhere.",
+    "safetyNote": "Training data only. Every credential-looking value is fictional. Never replace a placeholder with a real credential in this simulation, an AI tool, a ticket, chat, email, log, screenshot or support message."
+  },
+  "workspace": {
+    "title": "Merge request !184 · checkout-service",
+    "status": "Review in progress"
+  },
+  "initialState": {
+    "patchApplied": false,
+    "verificationPassed": false
+  },
+  "files": [
+    {
+      "id": "payment-client",
+      "path": "src/paymentClient.ts",
+      "language": "TypeScript",
+      "badge": "changed",
+      "initialVersion": "unsafe-a",
+      "versions": {
+        "unsafe-a": "import { logger } from './logger';\n\nconst paymentToken = \"FAKE_NOT_A_REAL_SECRET\";\n\nexport async function charge(orderId: string) {\n  try {\n    return await sendPayment(orderId, paymentToken);\n  } catch (error) {\n    logger.error(\"Payment request failed\", { authorization: paymentToken });\n    throw error;\n  }\n}",
+        "unsafe-b": "import { logger } from './logger';\n\nconst paymentToken = \"FAKE_NOT_A_REAL_SECRET\";\n\nexport async function charge(orderId: string) {\n  try {\n    return await sendPayment(orderId, paymentToken);\n  } catch (error) {\n    logger.error(`Payment failed token=${paymentToken}`);\n    throw error;\n  }\n}",
+        "safe": "import { logger } from './logger';\n\nconst paymentToken = process.env.PAYMENTS_API_TOKEN;\nif (!paymentToken) {\n  throw new Error(\"PAYMENTS_API_TOKEN is not configured\");\n}\n\nexport async function charge(orderId: string) {\n  try {\n    return await sendPayment(orderId, paymentToken);\n  } catch (error) {\n    logger.error(\"Payment request failed\", { requestId });\n    throw error;\n  }\n}"
+      }
+    },
+    {
+      "id": "browser-config",
+      "path": "src/browserConfig.ts",
+      "language": "TypeScript",
+      "badge": "changed",
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "export const checkoutConfig = {\n  apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL,\n  paymentToken: process.env.NEXT_PUBLIC_PAYMENT_TOKEN\n};",
+        "safe": "export const checkoutConfig = {\n  apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL\n};"
+      }
+    },
+    {
+      "id": "env-file",
+      "path": ".env",
+      "language": "dotenv",
+      "badge": "new",
+      "initialVersion": "tracked",
+      "versions": {
+        "tracked": "PAYMENT_TOKEN=FAKE_NOT_A_REAL_SECRET\nPAYMENTS_REGION=nonprod",
+        "removed": "# Secret-bearing local configuration removed from this change.\nPAYMENTS_REGION=nonprod"
+      }
+    },
+    {
+      "id": "test-helper",
+      "path": "test/paymentClient.test.ts",
+      "language": "TypeScript",
+      "badge": "later change",
+      "hidden": true,
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "test('reports payment failure', async () => {\n  const token = process.env.PAYMENTS_API_TOKEN;\n  console.log(`test token=${token}`);\n  await expect(runPaymentTest()).rejects.toThrow();\n});",
+        "safe": "test('reports payment failure', async () => {\n  await expect(runPaymentTest()).rejects.toThrow();\n});"
+      }
+    }
+  ],
+  "variants": [
+    {
+      "id": "structured-log",
+      "fileVersions": {
+        "payment-client": "unsafe-a"
+      }
+    },
+    {
+      "id": "template-log",
+      "fileVersions": {
+        "payment-client": "unsafe-b"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "inspect-change",
+      "type": "select-lines",
+      "typeLabel": "Investigate",
+      "title": "Mark every line that creates a secret exposure path",
+      "instruction": "Review the changed files. Select the exact lines that need correction before you approve the merge request.",
+      "visibleFiles": [
+        "payment-client",
+        "browser-config",
+        "env-file"
+      ],
+      "focusFile": "payment-client",
+      "correctSelections": [
+        "payment-client:3",
+        "payment-client:9",
+        "browser-config:3",
+        "env-file:1"
+      ],
+      "concept": {
+        "id": "secret-output",
+        "label": "Keep secret values out of diagnostic output"
+      },
+      "hints": [
+        "Look beyond the hard-coded literal. Ask where the value could be copied or exposed at runtime.",
+        "Check the error path, the browser-prefixed variable and the tracked local configuration file."
+      ],
+      "feedback": {
+        "correct": "You found the linked exposure paths. The next step is to remove the value from repository content, browser-visible configuration and output, then use the approved runtime retrieval pattern.",
+        "incorrect": "At least one exposure path is still open, or a safe line was marked. Review how the credential enters source, output, client code and tracked configuration."
+      },
+      "feedbackByMissing": {
+        "payment-client:3": "The credential literal is stored in source control.",
+        "payment-client:9": "The error path writes the credential into diagnostic output.",
+        "browser-config:3": "A NEXT_PUBLIC_ variable is available to browser code and is not suitable for a server-side secret.",
+        "env-file:1": "A tracked .env file remains a repository exposure."
+      }
+    },
+    {
+      "id": "apply-correction",
+      "type": "single-choice",
+      "typeLabel": "Correct",
+      "title": "Choose the correction you would request",
+      "instruction": "Select the change that removes the exposure paths without inventing a service-specific role, path or exception.",
+      "visibleFiles": [
+        "payment-client",
+        "browser-config",
+        "env-file"
+      ],
+      "focusFile": "payment-client",
+      "correctIds": [
+        "runtime"
+      ],
+      "choices": [
+        {
+          "id": "private",
+          "label": "Move the token into a committed private configuration file",
+          "detail": "Remove the literal from TypeScript but keep the value in repository content.",
+          "feedback": "Private repository access does not make source control an approved secrets manager. The value still persists in repository history and copies."
+        },
+        {
+          "id": "runtime",
+          "label": "Remove the value from source, tracked configuration, browser code and logs",
+          "detail": "Use the service's current approved manager and workload identity pattern at runtime, and keep diagnostics value-free."
+        },
+        {
+          "id": "mask",
+          "label": "Keep the current design and rely on log masking",
+          "detail": "Assume masking will prevent the credential from appearing in output.",
+          "feedback": "Masking does not prevent the value from being copied into logs, files, artifacts or other output. Prevent the value from being written in the first place."
+        }
+      ],
+      "concept": {
+        "id": "runtime-retrieval",
+        "label": "Use approved runtime retrieval instead of repository storage"
+      },
+      "hints": [
+        "A private repository and masked output still leave durable or observable copies.",
+        "The safer correction removes the value from source and output, then retrieves it through the approved runtime path."
+      ],
+      "feedback": {
+        "correct": "The correction removes the credential from repository content, client-visible configuration and diagnostic output, while keeping service-specific implementation details tied to current approved guidance.",
+        "incorrect": "That decision still leaves a durable or observable copy of the credential."
+      },
+      "onCorrect": {
+        "resolveSignals": [
+          "source",
+          "tracked-config",
+          "client",
+          "output",
+          "retrieval"
+        ],
+        "fileVersions": {
+          "payment-client": "safe",
+          "browser-config": "safe",
+          "env-file": "removed"
+        },
+        "unlockFiles": [
+          "test-helper"
+        ],
+        "openSignals": [
+          "regression"
+        ],
+        "setState": {
+          "patchApplied": true
+        },
+        "workspaceStatus": "Primary patch applied · verification required"
+      }
+    },
+    {
+      "id": "run-release-checks",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Run the simulated release checks",
+      "instruction": "Do not assume that the primary patch solved every problem. Run the configured checks and inspect the evidence.",
+      "visibleFiles": [
+        "payment-client",
+        "browser-config",
+        "env-file",
+        "test-helper"
+      ],
+      "focusFile": "payment-client",
+      "runPrompt": "Run the review checks against the current simulated repository state.",
+      "checks": [
+        {
+          "label": "Repository secret scan",
+          "results": [
+            {
+              "when": {
+                "key": "patchApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "No simulated credential literal found in the changed application or configuration files."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "Credential-like content remains in repository files."
+            }
+          ]
+        },
+        {
+          "label": "Client exposure review",
+          "results": [
+            {
+              "when": {
+                "key": "patchApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "No server-side credential is exposed through client-prefixed configuration."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "A client-visible credential pattern remains."
+            }
+          ]
+        },
+        {
+          "label": "Test-output review",
+          "results": [
+            {
+              "status": "fail",
+              "message": "A later test helper prints PAYMENTS_API_TOKEN to output. One risk remains."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "failed": "The main patch improved the change, but verification found a familiar exposure pattern in a different artifact. Investigate the test helper before clearing the release."
+      }
+    },
+    {
+      "id": "regression-recall",
+      "type": "select-lines",
+      "typeLabel": "Recall",
+      "title": "Find the regression that verification uncovered",
+      "instruction": "You saw this security principle earlier in application logging. Apply it again to the test helper.",
+      "visibleFiles": [
+        "test-helper",
+        "payment-client"
+      ],
+      "focusFile": "test-helper",
+      "correctSelections": [
+        "test-helper:3"
+      ],
+      "concept": {
+        "id": "secret-output",
+        "label": "Keep secret values out of diagnostic output",
+        "retrieval": true
+      },
+      "hints": [
+        "The test does not need to display the credential value to prove that error handling works."
+      ],
+      "feedback": {
+        "correct": "You recognized the same secret-output risk in a new context. Tests, scripts and diagnostics are part of the same exposure surface as application logs.",
+        "incorrect": "The remaining risk is in test output. Look for a line that reveals the value rather than the test result."
+      },
+      "onCorrect": {
+        "resolveSignals": [
+          "regression"
+        ],
+        "fileVersions": {
+          "test-helper": "safe"
+        },
+        "setState": {
+          "verificationPassed": true
+        },
+        "workspaceStatus": "Release review clear"
+      }
+    }
+  ],
+  "completion": {
+    "eyebrow": "Release cleared",
+    "title": "The change is ready for the next review step",
+    "message": "You removed the primary exposure paths, verified the correction and caught the same secret-output mistake when it reappeared in a test helper.",
+    "takeaways": [
+      "Review the whole engineering workflow, not only the line that first contains the credential.",
+      "Use current approved runtime retrieval rather than repository storage.",
+      "Verification matters because a secret can reappear in tests, logs and supporting artifacts.",
+      "Recognizing the same risk in a different form strengthens secure review habits."
+    ]
+  },
+  "sourceBasis": [
+    "Course Draft — Lesson 6 integrated simulation",
+    "Course Outline — hard-coded values, tracked .env, client-visible configuration, logging and runtime retrieval"
+  ]
+}

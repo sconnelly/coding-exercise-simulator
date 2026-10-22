@@ -1,0 +1,463 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "ai-context-control",
+    "title": "AI Context Control: Share the Problem, Not the Secret",
+    "subtitle": "Control assistant context, review generated code and respond safely if a credential may have reached the tool.",
+    "role": "Engineer using an approved AI coding assistant",
+    "estimatedMinutes": 8,
+    "difficulty": "Challenge"
+  },
+  "mission": {
+    "eyebrow": "Mission 05 · AI-assisted work",
+    "objective": "Get useful troubleshooting help without sending credentials or secret-bearing context to the assistant, then review generated code with the same security discipline used elsewhere.",
+    "activeLabel": "Context at risk",
+    "clearLabel": "Context controlled",
+    "riskSignals": [
+      {
+        "id": "agent-scope",
+        "label": "Assistant can read unnecessary secret-bearing files",
+        "initial": "open"
+      },
+      {
+        "id": "prompt-context",
+        "label": "Troubleshooting context contains credential material",
+        "initial": "open"
+      },
+      {
+        "id": "generated-hardcode",
+        "label": "Generated code hard-codes a credential",
+        "initial": "open"
+      },
+      {
+        "id": "generated-output",
+        "label": "Generated code prints a credential",
+        "initial": "open"
+      },
+      {
+        "id": "generated-client",
+        "label": "Generated code exposes a client-visible credential",
+        "initial": "open"
+      },
+      {
+        "id": "later-context",
+        "label": "Later diagnostic context reintroduces credential material",
+        "initial": "dormant"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "context-controller",
+        "icon": "◆",
+        "title": "Context controller",
+        "description": "Completed the mission without a solution reveal.",
+        "condition": {
+          "type": "no-reveals"
+        }
+      },
+      {
+        "id": "human-review",
+        "icon": "✓",
+        "title": "Human review held",
+        "description": "Resolved every generated-code and context risk signal.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      },
+      {
+        "id": "context-recall",
+        "icon": "↺",
+        "title": "Context pattern recalled",
+        "description": "Recognized unsafe credential context when it resurfaced later.",
+        "condition": {
+          "type": "retrieval-wins-at-least",
+          "value": 1
+        }
+      }
+    ]
+  },
+  "brief": {
+    "role": "You are troubleshooting a failed payment request with help from an approved AI coding assistant.",
+    "context": "The workspace contains a .env file and terminal output with an authorization header. The assistant can access project files if you allow it. Later it proposes code that hard-codes, prints and exposes a credential. Control the context, review the output and apply the same rules again when a screenshot request appears later.",
+    "safetyNote": "Training data only. Every credential-looking value is fictional. Never replace a placeholder with a real credential in this simulation, an AI tool, a ticket, chat, email, log, screenshot or support message. Approval of an AI tool does not mean every file, prompt, connected system or data path is approved for every use."
+  },
+  "workspace": {
+    "title": "IDE assistant session · checkout-service",
+    "status": "AI troubleshooting session"
+  },
+  "initialState": {
+    "contextSafe": false,
+    "patchReviewed": false
+  },
+  "files": [
+    {
+      "id": "env",
+      "path": ".env",
+      "language": "dotenv",
+      "badge": "local",
+      "content": "PAYMENT_TOKEN=FAKE_NOT_A_REAL_SECRET\nPAYMENTS_REGION=nonprod"
+    },
+    {
+      "id": "terminal",
+      "path": "terminal-output.txt",
+      "language": "text",
+      "badge": "diagnostic",
+      "initialVersion": "unsafe-a",
+      "versions": {
+        "unsafe-a": "POST /payments 401 Unauthorized\nAuthorization: Bearer FAKE_NOT_A_REAL_SECRET\nrequest_id=req-training-481\nerror=invalid_credentials",
+        "unsafe-b": "Payment request failed\nheaders.authorization=Bearer FAKE_NOT_A_REAL_SECRET\nrequest_id=req-training-772\nstatus=401",
+        "safe": "POST /payments 401 Unauthorized\nAuthorization: [REDACTED]\nrequest_id=req-training-481\nerror=invalid_credentials"
+      }
+    },
+    {
+      "id": "safe-context",
+      "path": "assistant-context.txt",
+      "language": "text",
+      "badge": "draft",
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "Please inspect the entire project, including .env, and fix the 401 error.\nRaw terminal output is attached.",
+        "safe": "Troubleshoot a fictional 401 authentication failure.\nCredential values are removed.\nRelevant error: 401 invalid_credentials\nRequest ID: req-training-481\nUse a synthetic placeholder if an example needs a token."
+      }
+    },
+    {
+      "id": "ai-patch",
+      "path": "AI suggestion · paymentClient.ts",
+      "language": "TypeScript",
+      "badge": "generated",
+      "content": "const token = \"FAKE_NOT_A_REAL_SECRET\";\n\nexport async function charge(orderId: string) {\n  console.log(`Using payment token ${token}`);\n  return sendPayment(orderId, token);\n}\n\nexport const browserToken = process.env.NEXT_PUBLIC_PAYMENT_TOKEN;"
+    },
+    {
+      "id": "reviewed-patch",
+      "path": "reviewed-patch.ts",
+      "language": "TypeScript",
+      "badge": "candidate",
+      "hidden": true,
+      "content": "const token = process.env.PAYMENTS_API_TOKEN;\nif (!token) {\n  throw new Error(\"PAYMENTS_API_TOKEN is not configured\");\n}\n\nlogger.error(\"Payment request failed\", { requestId });"
+    },
+    {
+      "id": "screenshot-request",
+      "path": "follow-up-request.txt",
+      "language": "text",
+      "badge": "later prompt",
+      "hidden": true,
+      "content": "Assistant: I still need more detail. Please attach a screenshot of the terminal and the environment configuration so I can compare the values."
+    }
+  ],
+  "variants": [
+    {
+      "id": "authorization-header",
+      "fileVersions": {
+        "terminal": "unsafe-a"
+      }
+    },
+    {
+      "id": "header-object",
+      "fileVersions": {
+        "terminal": "unsafe-b"
+      },
+      "stageOverrides": {
+        "prepare-context": {
+          "instruction": "The terminal output exposes the credential through a header field. Prepare the smallest safe context before asking for help."
+        }
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "prepare-context",
+      "type": "multi-choice",
+      "typeLabel": "Prepare",
+      "title": "Prepare safe context before asking for help",
+      "instruction": "Select every action you should take before sending troubleshooting context to the assistant.",
+      "visibleFiles": [
+        "env",
+        "terminal",
+        "safe-context"
+      ],
+      "focusFile": "terminal",
+      "correctIds": [
+        "approval",
+        "restrict",
+        "redact",
+        "minimal"
+      ],
+      "choices": [
+        {
+          "id": "approval",
+          "label": "Confirm the current tool, use case and data path are approved",
+          "feedbackIfMissed": "Being signed in to an approved tool is not blanket approval for every use or data path."
+        },
+        {
+          "id": "restrict",
+          "label": "Restrict file and tool access to what the task needs",
+          "feedbackIfMissed": "Agent access can expose files that were never typed into the prompt."
+        },
+        {
+          "id": "redact",
+          "label": "Remove credentials from logs, terminal output, screenshots and configuration",
+          "feedbackIfMissed": "Credentials can enter AI context through more than prompt text."
+        },
+        {
+          "id": "minimal",
+          "label": "Provide a minimal synthetic example that preserves the error and code path",
+          "feedbackIfMissed": "A smaller reviewed context reduces unnecessary disclosure while preserving the troubleshooting problem."
+        },
+        {
+          "id": "whole-project",
+          "label": "Share the whole project because the assistant is already approved",
+          "feedbackIfSelected": "Tool approval does not make secret-bearing files appropriate input."
+        },
+        {
+          "id": "half-token",
+          "label": "Share only part of the token so the assistant can compare it",
+          "feedbackIfSelected": "Partial credential disclosure is still sensitive and is not needed to troubleshoot the pattern."
+        }
+      ],
+      "concept": {
+        "id": "safe-ai-context",
+        "label": "Remove credentials and minimize AI context"
+      },
+      "hints": [
+        "Think about approval, file access, credential removal and how much context the task truly needs."
+      ],
+      "feedback": {
+        "correct": "You controlled the tool boundary and the information boundary before asking for help.",
+        "incorrect": "One or more selected actions would give the assistant unnecessary or secret-bearing context."
+      },
+      "onCorrect": {
+        "resolveSignals": [
+          "agent-scope",
+          "prompt-context"
+        ],
+        "fileVersions": {
+          "terminal": "safe",
+          "safe-context": "safe"
+        },
+        "setState": {
+          "contextSafe": true
+        },
+        "workspaceStatus": "Context prepared · generated output requires review"
+      }
+    },
+    {
+      "id": "review-ai-patch",
+      "type": "select-lines",
+      "typeLabel": "Review",
+      "title": "Mark every unsafe line in the AI-generated patch",
+      "instruction": "Treat generated code like any other code review. Select each line that introduces an unsafe secret-handling pattern.",
+      "visibleFiles": [
+        "ai-patch",
+        "safe-context"
+      ],
+      "focusFile": "ai-patch",
+      "correctSelections": [
+        "ai-patch:1",
+        "ai-patch:4",
+        "ai-patch:8"
+      ],
+      "concept": {
+        "id": "secret-output",
+        "label": "Keep credentials out of source, output and client-visible configuration"
+      },
+      "hints": [
+        "Check where the value is stored, whether it is printed and whether browser code can access it."
+      ],
+      "feedback": {
+        "correct": "You found all three generated-code problems: hard-coded credential, secret output and client-visible configuration.",
+        "incorrect": "The patch still contains one or more patterns that can expose a credential."
+      },
+      "feedbackByMissing": {
+        "ai-patch:1": "The generated code hard-codes a credential-like value in source.",
+        "ai-patch:4": "The generated code prints the credential to output.",
+        "ai-patch:8": "NEXT_PUBLIC_ makes the value available to browser code."
+      }
+    },
+    {
+      "id": "apply-reviewed-patch",
+      "type": "single-choice",
+      "typeLabel": "Correct",
+      "title": "Choose the reviewed correction",
+      "instruction": "Select the action that preserves human review and uses the approved secret-handling boundary.",
+      "visibleFiles": [
+        "ai-patch",
+        "safe-context"
+      ],
+      "focusFile": "ai-patch",
+      "correctIds": [
+        "reviewed"
+      ],
+      "choices": [
+        {
+          "id": "accept",
+          "label": "Accept the generated patch because the assistant produced it from an approved tool",
+          "feedback": "Tool approval does not make generated code automatically safe or policy-aligned. Human review remains required."
+        },
+        {
+          "id": "reviewed",
+          "label": "Reject the unsafe patch and apply a reviewed runtime-retrieval pattern with value-free diagnostics",
+          "detail": "Use fictional values in training and follow current approved implementation guidance."
+        },
+        {
+          "id": "hide",
+          "label": "Keep the patch but move the generated token to a test file",
+          "feedback": "Moving the credential to another repository file does not solve the storage or exposure problem."
+        }
+      ],
+      "hints": [
+        "Generated output needs the same review standard as human-written code."
+      ],
+      "feedback": {
+        "correct": "You rejected unsafe generated code and kept responsibility with the engineer reviewing the change.",
+        "incorrect": "That choice treats tool approval or file location as a substitute for secure handling."
+      },
+      "onCorrect": {
+        "resolveSignals": [
+          "generated-hardcode",
+          "generated-output",
+          "generated-client"
+        ],
+        "unlockFiles": [
+          "reviewed-patch",
+          "screenshot-request"
+        ],
+        "openSignals": [
+          "later-context"
+        ],
+        "setState": {
+          "patchReviewed": true
+        },
+        "workspaceStatus": "Generated patch reviewed · follow-up context request received"
+      }
+    },
+    {
+      "id": "verify-ai-workflow",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Run the simulated AI-workflow checks",
+      "instruction": "Verify both sides of the workflow: what the assistant received and what the engineer accepted.",
+      "visibleFiles": [
+        "safe-context",
+        "reviewed-patch",
+        "screenshot-request"
+      ],
+      "focusFile": "reviewed-patch",
+      "runPrompt": "Run the simulated context and generated-code checks.",
+      "checks": [
+        {
+          "label": "Assistant context",
+          "results": [
+            {
+              "when": {
+                "key": "contextSafe",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The active troubleshooting context contains synthetic, minimized information with credential values removed."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "Secret-bearing context remains available to the assistant."
+            }
+          ]
+        },
+        {
+          "label": "Generated-code review",
+          "results": [
+            {
+              "when": {
+                "key": "patchReviewed",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The unsafe generated patch was rejected and replaced with reviewed code."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "Generated code still contains an unsafe secret-handling pattern."
+            }
+          ]
+        },
+        {
+          "label": "Follow-up request",
+          "results": [
+            {
+              "status": "fail",
+              "message": "The assistant asks for a screenshot and environment configuration that could reintroduce credential material."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "failed": "The current work is safer, but the follow-up request tests whether you will preserve the same context controls later in the session."
+      }
+    },
+    {
+      "id": "context-recall",
+      "type": "single-choice",
+      "typeLabel": "Recall",
+      "title": "Respond to the follow-up request without reintroducing the secret",
+      "instruction": "Choose the response that preserves troubleshooting value without giving the assistant credential-bearing context.",
+      "visibleFiles": [
+        "screenshot-request",
+        "safe-context",
+        "terminal"
+      ],
+      "focusFile": "screenshot-request",
+      "correctIds": [
+        "minimal"
+      ],
+      "choices": [
+        {
+          "id": "screens",
+          "label": "Attach the requested screenshot and .env file because the assistant already helped with this task",
+          "feedback": "A continuing session does not make new secret-bearing context safe to share."
+        },
+        {
+          "id": "minimal",
+          "label": "Decline the secret-bearing context and provide a reviewed, minimal synthetic excerpt instead",
+          "detail": "Keep the error type and relevant code path while removing credentials and unrelated internal information."
+        },
+        {
+          "id": "blur",
+          "label": "Blur only the centre of the token in a screenshot",
+          "feedback": "Partial visual masking can still disclose credential material and unnecessary internal context."
+        }
+      ],
+      "concept": {
+        "id": "safe-ai-context",
+        "label": "Remove credentials and minimize AI context",
+        "retrieval": true
+      },
+      "hints": [
+        "The safe-context rule still applies later in the same session."
+      ],
+      "feedback": {
+        "correct": "You preserved the same context boundary when the request changed format. Screenshots, files and terminal output need the same review as prompt text.",
+        "incorrect": "That response reintroduces credential-bearing or unnecessary context."
+      },
+      "onCorrect": {
+        "resolveSignals": [
+          "later-context"
+        ],
+        "workspaceStatus": "AI context controlled"
+      }
+    }
+  ],
+  "completion": {
+    "title": "AI-assisted workflow controlled",
+    "message": "You controlled what the assistant could see, reviewed what it produced and applied the same safe-context rule when a later request tried to reintroduce secret-bearing information.",
+    "takeaways": [
+      "AI context includes files, logs, screenshots, terminal output, tools and connected systems, not only typed prompts.",
+      "Never provide passwords, credentials, keys, tokens, private keys, .env values or temporary access codes to an AI tool.",
+      "Generated code requires human review for hard-coded values, secret output and client-visible configuration.",
+      "Safe handling must continue throughout the session; a later screenshot or file request can reopen the same risk."
+    ]
+  },
+  "sourceBasis": [
+    "Course Draft — Lesson 5 AI-assisted work and Secrets",
+    "Course Outline — AI prompts, context, agent access and generated code review"
+  ]
+}
