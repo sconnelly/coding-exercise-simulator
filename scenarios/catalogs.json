@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "title": "Secure Engineering Mission Library",
+  "subtitle": "Choose a course mission board, then select a challenge within that course.",
+  "catalogs": [
+    {
+      "id": "01-secure-coding-techniques",
+      "number": "01",
+      "file": "01-catalog.json",
+      "title": "Secure Coding Techniques",
+      "summary": "Applied practice for input safety, browser output, access control, secure logging and AI-assisted code review.",
+      "tags": ["Secure coding", "Applied practice", "Five missions"]
+    },
+    {
+      "id": "02-secrets-management",
+      "number": "02",
+      "file": "02-catalog.json",
+      "title": "Secrets Management",
+      "summary": "Applied practice for keeping credentials out of code, pipelines, infrastructure artifacts, response workflows and AI context.",
+      "tags": ["Secrets", "CI/CD", "AI-assisted work"]
+    }
+  ]
+}

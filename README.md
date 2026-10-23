@@ -1,48 +1,42 @@
-# Secrets Management Mission Simulator — V2
+# Secure Engineering Mission Library
 
-This package contains one reusable HTML5 simulation engine and five Secrets Management missions configured in JSON.
+This package uses one shared simulation engine and multiple JSON-configured course mission boards.
 
-## Open the simulator
+Open `index.html` through a local or hosted web server. The launcher reads `scenarios/catalogs.json`, loads the selected course catalog, then opens each mission in `simulator.html`.
 
-Host this folder on a web server and open `index.html`.
+## Catalog structure
 
-The scenario board reads `scenarios/catalog.json`. Each mission launches the shared `simulator.html` engine with a scenario JSON file.
-
-## Included missions
-
-1. `01-release-gate.json` — code review, runtime retrieval and regression verification
-2. `02-pipeline-containment.json` — GitLab CI/CD, fail-forward consequences, artifacts and external-secret retrieval review
-3. `03-terraform-boundary.json` — Terraform `sensitive`, plan/state persistence and support-sharing risk
-4. `04-exposure-response.json` — active versus already-inactive credential response and repository cleanup priority
-5. `05-ai-context-control.json` — AI context control, generated-code review and later context re-exposure
-
-## V2 capabilities
-
-The engine supports JSON-configured:
-
-- persistent mission state and file versions;
-- random scenario variants;
-- risk signals, review streaks, retrieval wins and achievements;
-- misconception-specific feedback;
-- simulated verification checks;
-- retrieval and interleaving tags;
-- fail-forward consequences and conditional stages;
-- line selection, single choice, multiple choice and sequencing;
-- progressive hints and Reveal solution;
-- responsive and keyboard-accessible interactions.
-
-No learner score is sent to an LMS.
-
-## Create or modify a mission
-
-See `SCENARIO-CONFIG-GUIDE.md`.
-
-Run the configuration validator after edits:
-
-```bash
-python3 validate-scenarios.py
+```text
+scenarios/
+├── catalogs.json
+├── 01-catalog.json
+├── 01-01-input-validation-query.json
+├── 01-02-contextual-output-encoding.json
+├── ...
+├── 02-catalog.json
+├── 02-01-next-course-mission.json
+└── ...
 ```
 
-## Important content guardrail
+- `catalogs.json` is the library index. Add one entry per course mission board.
+- Each numbered catalog lists only the scenarios for that course.
+- Scenario file prefixes follow `<course>-<mission>-<slug>.json`, such as `02-03-api-review.json`.
 
-Use fictional placeholders only. Do not place real credentials, production logs, secret-bearing screenshots, sensitive internal data or real `.env` values in a scenario.
+The current catalog is carried in the URL, so **All scenarios** returns the learner to the same course board.
+
+## Add a course board
+
+1. Add the course's scenario JSON files in `scenarios/`, using the next course prefix.
+2. Create a matching numbered catalog, such as `02-catalog.json`.
+3. Add its metadata and filename to `scenarios/catalogs.json`.
+4. Run:
+
+   ```bash
+   python3 validate-scenarios.py
+   ```
+
+No launcher or engine changes are required when adding another catalog.
+
+## Current board
+
+`01-catalog.json` contains the five **Secure Coding Techniques** scenarios. `02-catalog.json` preserves the five original **Secrets Management** scenarios from the supplied simulator package.

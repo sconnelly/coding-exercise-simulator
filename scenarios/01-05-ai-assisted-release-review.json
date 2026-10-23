@@ -1,0 +1,402 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "ai-assisted-release-review",
+    "title": "AI Draft: Review Before You Merge",
+    "subtitle": "Apply the normal secure-review bar to an AI-generated order endpoint and preserve safe AI context controls.",
+    "role": "Pull-request author and reviewer",
+    "estimatedMinutes": 6,
+    "difficulty": "Challenge"
+  },
+  "brief": {
+    "role": "You are reviewing a fictional order-history endpoint drafted by an approved AI coding assistant.",
+    "context": "The code runs locally, but the draft includes input handling, authorization, logging and dependency concerns. Review it as you would any other change, then respond safely when the assistant asks for more troubleshooting context.",
+    "safetyNote": "Training data only. Never provide secrets, credentials, tokens, internal endpoints, proprietary code, guest data, screenshots, logs or terminal output containing sensitive values to an AI tool."
+  },
+  "mission": {
+    "eyebrow": "Mission 05 · AI-assisted release review",
+    "objective": "Keep human accountability for an AI-generated change: review the code, verify it and protect the assistant context.",
+    "activeLabel": "Release blocked",
+    "clearLabel": "Ready for human approval",
+    "riskSignals": [
+      {
+        "id": "injection",
+        "label": "Untrusted input reaches a string-built query",
+        "initial": "open"
+      },
+      {
+        "id": "authorization",
+        "label": "Server-side order authorization missing",
+        "initial": "open"
+      },
+      {
+        "id": "sensitive-logging",
+        "label": "Authorization value logged by generated code",
+        "initial": "open"
+      },
+      {
+        "id": "dependency",
+        "label": "AI-added dependency finding unresolved",
+        "initial": "open"
+      },
+      {
+        "id": "ai-context",
+        "label": "Follow-up AI context not controlled",
+        "initial": "dormant"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "unassisted-review",
+        "icon": "◆",
+        "title": "Unassisted review",
+        "description": "Completed the mission without using a hint.",
+        "condition": {
+          "type": "no-hints"
+        }
+      },
+      {
+        "id": "human-accountability",
+        "icon": "✓",
+        "title": "Human accountability",
+        "description": "Verified the generated change and controlled the assistant context.",
+        "condition": {
+          "type": "state-equals",
+          "key": "contextControlled",
+          "value": true
+        }
+      },
+      {
+        "id": "release-ready",
+        "icon": "◆",
+        "title": "Release review complete",
+        "description": "Resolved every configured open risk.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      }
+    ]
+  },
+  "initialState": {
+    "reviewApplied": false,
+    "contextControlled": false
+  },
+  "workspace": {
+    "title": "AI-assisted merge request !273 · order-history-service",
+    "status": "Generated draft awaiting review"
+  },
+  "files": [
+    {
+      "id": "ai-route",
+      "path": "src/routes/aiOrderHistory.ts",
+      "language": "TypeScript",
+      "badge": "AI-generated",
+      "initialVersion": "unsafe-concatenation",
+      "versions": {
+        "unsafe-concatenation": "router.get(\"/orders/:id\", requireSignedIn, async (req, res) => {\n  const sql = \"SELECT * FROM orders WHERE id = '\" + req.params.id + \"'\";\n  const [rows] = await db.query(sql);\n  logger.info(\"order_lookup\", { authorization: req.headers.authorization });\n  res.json(rows);\n});",
+        "unsafe-filter": "router.get(\"/orders/:id\", requireSignedIn, async (req, res) => {\n  const id = req.params.id.replace(/'/g, \"\");\n  const sql = \"SELECT * FROM orders WHERE id = '\" + id + \"'\";\n  const [rows] = await db.query(sql);\n  logger.info(\"order_lookup\", { authorization: req.headers.authorization });\n  res.json(rows);\n});",
+        "safe": "router.get(\"/orders/:id\", requireSignedIn, async (req, res) => {\n  const id = Number(req.params.id);\n  if (!Number.isInteger(id) || id <= 0) return res.status(400).send(\"Invalid order id\");\n  const [rows] = await db.query(\"SELECT * FROM orders WHERE id = ?\", [id]);\n  const order = rows[0];\n  if (!order || order.guestId !== req.user.guestId || !req.user.permissions.includes(\"orders:read\")) return res.status(403).end();\n  logger.info(\"order_lookup\", { orderId: hash(id), outcome: \"requested\" });\n  res.json(order);\n});"
+      }
+    },
+    {
+      "id": "order-ui",
+      "path": "src/ui/OrderLink.tsx",
+      "language": "TypeScript",
+      "badge": "AI-generated",
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "export function OrderLink({ orderId, isOwner }) {\n  // The endpoint relies on this UI guard, so no server check is needed.\n  if (!isOwner) return null;\n  return <a href={\"/orders/\" + orderId}>View order</a>;\n}",
+        "safe": "export function OrderLink({ orderId, isOwner }) {\n  // This UI guard is for navigation only; the endpoint authorizes on the server.\n  if (!isOwner) return null;\n  return <a href={\"/orders/\" + orderId}>View order</a>;\n}"
+      }
+    },
+    {
+      "id": "package-json",
+      "path": "package.json",
+      "language": "JSON",
+      "badge": "AI-added dependency",
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "{\n  \"dependencies\": {\n    \"@training/legacy-parser\": \"1.0.0\"\n  }\n}",
+        "safe": "{\n  \"dependencies\": {\n    \"@training/approved-order-parser\": \"2.0.0\"\n  }\n}"
+      }
+    },
+    {
+      "id": "scan-report",
+      "path": "security/review-findings.txt",
+      "language": "text",
+      "badge": "simulated scan",
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "Simulated review findings\n- AI-generated route builds SQL with request input\n- Endpoint relies on UI access control rather than server authorization\n- Authorization header is logged for debugging\n- @training/legacy-parser 1.0.0 is an unresolved training dependency finding",
+        "safe": "Simulated review findings\n- Input validation and parameterized query detected\n- Server-side permission and order ownership check detected\n- Diagnostic event is value-safe\n- Training dependency finding resolved; normal dependency approval and review remain required"
+      }
+    },
+    {
+      "id": "assistant-request",
+      "path": "assistant/follow-up-request.txt",
+      "language": "text",
+      "badge": "assistant request",
+      "hidden": true,
+      "content": "Assistant follow-up: To investigate a remaining local test issue, please attach the staging log, the live service URL and the environment configuration file."
+    }
+  ],
+  "variants": [
+    {
+      "id": "direct-concatenation",
+      "fileVersions": {
+        "ai-route": "unsafe-concatenation"
+      },
+      "workspaceOverride": {
+        "status": "Generated draft awaiting review · direct query concatenation"
+      }
+    },
+    {
+      "id": "deny-list-filter",
+      "fileVersions": {
+        "ai-route": "unsafe-filter"
+      },
+      "workspaceOverride": {
+        "status": "Generated draft awaiting review · deny-list filter before query"
+      },
+      "stageOverrides": {
+        "inspect-generated-draft": {
+          "correctSelections": ["ai-route:2", "ai-route:3", "ai-route:5", "order-ui:2", "package-json:3"],
+          "feedbackByMissing": {
+            "ai-route:2": "Stripping a few characters is a fragile deny-list, not validation for the expected identifier.",
+            "ai-route:3": "The generated code still joins input into SQL instead of binding it as data.",
+            "ai-route:5": "An authorization value is a secret and must not be written to diagnostics."
+          }
+        }
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "inspect-generated-draft",
+      "type": "select-lines",
+      "typeLabel": "Review",
+      "title": "Mark every insecure decision in the generated draft",
+      "instruction": "Treat AI-generated output as untrusted until reviewed. Select the lines that create the configured query, access, logging and dependency risks.",
+      "visibleFiles": ["ai-route", "order-ui", "package-json", "scan-report"],
+      "focusFile": "ai-route",
+      "correctSelections": ["ai-route:2", "ai-route:4", "order-ui:2", "package-json:3"],
+      "hints": [
+        "Use the same review checklist for generated code as for human-written code: input, authorization, logs and dependencies.",
+        "Look for a query made from request data, an authorization value in diagnostics, a UI-only access claim and the flagged dependency."
+      ],
+      "feedback": {
+        "correct": "You found every configured issue. The draft is not ready simply because it runs locally or came from an approved assistant.",
+        "incorrect": "Review all four artifact types: route input, server authorization, diagnostics and the dependency manifest."
+      },
+      "feedbackByMissing": {
+        "ai-route:2": "The generated code joins request input into SQL instead of validating it and binding it as query data.",
+        "ai-route:4": "An authorization value is a secret and must not be written to diagnostics.",
+        "order-ui:2": "A UI guard is not authorization. The endpoint still needs a server-side permission and resource-scope check.",
+        "package-json:3": "The simulated scan flags this AI-added dependency. Review, replace or escalate it rather than accepting it unexamined."
+      },
+      "concept": {
+        "id": "secure-review-checklist",
+        "label": "Review input, access, logs and dependencies before merge"
+      }
+    },
+    {
+      "id": "apply-reviewed-plan",
+      "type": "multi-choice",
+      "typeLabel": "Correct",
+      "title": "Select every action required before approval",
+      "instruction": "Choose the complete secure-review plan for this generated change.",
+      "visibleFiles": ["ai-route", "order-ui", "package-json", "scan-report"],
+      "focusFile": "scan-report",
+      "correctIds": ["query-fix", "server-access", "safe-logs", "dependency-review"],
+      "choices": [
+        {
+          "id": "query-fix",
+          "label": "Validate the order identifier and use a parameterized query",
+          "feedbackIfMissed": "A generated route needs the same protection from injection as a human-written route."
+        },
+        {
+          "id": "server-access",
+          "label": "Add a server-side permission and order-ownership check before returning the order",
+          "feedbackIfMissed": "The endpoint must enforce least privilege itself; a UI guard is not a boundary."
+        },
+        {
+          "id": "safe-logs",
+          "label": "Replace the authorization log with a value-safe event record",
+          "feedbackIfMissed": "Useful diagnostics do not require a credential or authorization value."
+        },
+        {
+          "id": "dependency-review",
+          "label": "Replace or otherwise resolve the flagged dependency through the normal approved review process",
+          "feedbackIfMissed": "A dependency finding needs remediation or justified escalation, not blanket acceptance."
+        },
+        {
+          "id": "merge-local",
+          "label": "Merge because the generated code passed local testing",
+          "feedbackIfSelected": "Local functional tests do not prove that code is secure, approved or safe at edge cases."
+        },
+        {
+          "id": "prompt-only",
+          "label": "Keep the code because the prompt asked the assistant to write secure code",
+          "feedbackIfSelected": "A security-focused prompt may improve a draft, but it does not replace review, testing or normal approval."
+        }
+      ],
+      "hints": [
+        "The assistant can accelerate a draft, but it does not own any of the security decisions.",
+        "Choose the actions that cover query safety, server authorization, safe diagnostics and the dependency finding."
+      ],
+      "feedback": {
+        "correct": "You applied the ordinary secure-review bar to the generated change and kept accountability with the engineer reviewing it.",
+        "incorrect": "One or more selected actions leave a reviewed risk unresolved or treat tool confidence as verification."
+      },
+      "onCorrect": {
+        "resolveSignals": ["injection", "authorization", "sensitive-logging", "dependency"],
+        "openSignals": ["ai-context"],
+        "fileVersions": {
+          "ai-route": "safe",
+          "order-ui": "safe",
+          "package-json": "safe",
+          "scan-report": "safe"
+        },
+        "unlockFiles": ["assistant-request"],
+        "setState": {
+          "reviewApplied": true
+        },
+        "workspaceStatus": "Generated change corrected · assistant follow-up requires context review"
+      },
+      "concept": {
+        "id": "human-accountability",
+        "label": "AI-generated code is untrusted until reviewed and tested"
+      }
+    },
+    {
+      "id": "verify-reviewed-change",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Run the simulated release checks",
+      "instruction": "Verify the reviewed implementation before acting on the assistant's new request for more context.",
+      "runPrompt": "Run secure-review checks.",
+      "visibleFiles": ["ai-route", "order-ui", "package-json", "scan-report", "assistant-request"],
+      "focusFile": "scan-report",
+      "checks": [
+        {
+          "label": "Input and query review",
+          "results": [
+            {
+              "when": {
+                "key": "reviewApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The route validates the identifier and binds it as query data."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The route still handles request data through unsafe query construction."
+            }
+          ]
+        },
+        {
+          "label": "Server authorization review",
+          "results": [
+            {
+              "when": {
+                "key": "reviewApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The endpoint checks server-side permission and order ownership before responding."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The implementation still relies on a UI control rather than server authorization."
+            }
+          ]
+        },
+        {
+          "label": "Logging and dependency review",
+          "results": [
+            {
+              "when": {
+                "key": "reviewApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The diagnostic event is value-safe and the simulated dependency finding is resolved."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "A sensitive diagnostic value or unresolved dependency finding remains."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "passed": "The reviewed code has evidence for each correction. Now apply the same judgment to the assistant's request for additional context.",
+        "failed": "The simulated release checks found a risk that still needs review."
+      }
+    },
+    {
+      "id": "control-assistant-context",
+      "type": "single-choice",
+      "typeLabel": "Recall",
+      "title": "Respond to the assistant without disclosing sensitive context",
+      "instruction": "Choose the response that preserves troubleshooting value without sending logs, environment files or internal endpoints to the assistant.",
+      "visibleFiles": ["assistant-request", "scan-report"],
+      "focusFile": "assistant-request",
+      "correctIds": ["minimal-synthetic"],
+      "choices": [
+        {
+          "id": "attach-files",
+          "label": "Attach the staging log and environment configuration because the assistant is approved",
+          "feedback": "Tool approval does not make secret-bearing logs or environment files safe to share."
+        },
+        {
+          "id": "minimal-synthetic",
+          "label": "Decline the sensitive request and provide a reviewed, minimal synthetic example instead",
+          "detail": "Keep only the relevant error category and code path, with placeholders replacing sensitive and internal values."
+        },
+        {
+          "id": "partial-redaction",
+          "label": "Share the files after obscuring the centre of any token",
+          "feedback": "Partial masking can still disclose credential material and leaves unnecessary internal context in the conversation."
+        }
+      ],
+      "hints": [
+        "AI context includes attachments, logs, screenshots, terminal output and connected files, not only typed prompts.",
+        "The safest response preserves the problem structure while removing unnecessary and sensitive information."
+      ],
+      "feedback": {
+        "correct": "You kept the information boundary intact after the code review. A later request does not make secret-bearing context safe to share.",
+        "incorrect": "That response gives the assistant sensitive or unnecessary context that is not needed to solve the problem."
+      },
+      "onCorrect": {
+        "resolveSignals": ["ai-context"],
+        "setState": {
+          "contextControlled": true
+        },
+        "workspaceStatus": "Secure review and AI context controls complete"
+      },
+      "concept": {
+        "id": "safe-ai-context",
+        "label": "Use approved tools and minimize context with placeholders"
+      }
+    }
+  ],
+  "completion": {
+    "eyebrow": "Human approval ready",
+    "title": "The AI draft met the review bar",
+    "message": "You treated the generated code as a suggestion, verified each correction and kept sensitive context out of the follow-up interaction.",
+    "takeaways": [
+      "AI-generated code requires the same review, testing, scan and approval standard as human-written code.",
+      "A secure-sounding prompt and a passing local test are not evidence that the code is safe to merge.",
+      "Never share secrets, environment files, internal endpoints, proprietary code or guest data with an AI tool; use a reviewed, minimal synthetic example instead."
+    ]
+  },
+  "sourceBasis": [
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 5: Verify Code: Review, Testing, and AI-Assisted Development",
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 6: End-to-End Scenario"
+  ]
+}

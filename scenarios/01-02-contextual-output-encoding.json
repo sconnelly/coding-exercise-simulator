@@ -1,0 +1,302 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "contextual-output-encoding",
+    "title": "Guest Welcome: Render Data Safely",
+    "subtitle": "Review browser rendering code, use context-appropriate output handling and catch a second XSS pattern.",
+    "role": "Front-end code reviewer",
+    "estimatedMinutes": 6,
+    "difficulty": "Applied"
+  },
+  "brief": {
+    "role": "You are reviewing a fictional front-end change that renders a guest-provided display name.",
+    "context": "The change works for friendly text, but it uses a browser API that interprets strings as markup. Inspect the evidence, choose a safe rendering approach and verify a similar helper did not reintroduce the problem.",
+    "safetyNote": "Training data only. The scenario uses fictional names and code. Do not put guest or sensitive data into browser test fixtures or AI prompts."
+  },
+  "mission": {
+    "eyebrow": "Mission 02 · Contextual output",
+    "objective": "Ensure untrusted values are displayed as data in the right browser context rather than interpreted as executable markup.",
+    "activeLabel": "Review open",
+    "clearLabel": "Rendering safe",
+    "riskSignals": [
+      {
+        "id": "unsafe-dom-write",
+        "label": "Untrusted value written as markup",
+        "initial": "open"
+      },
+      {
+        "id": "context-mismatch",
+        "label": "Output context not handled safely",
+        "initial": "open"
+      },
+      {
+        "id": "template-regression",
+        "label": "Unsafe rendering in shared helper",
+        "initial": "dormant"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "xss-reviewer",
+        "icon": "◆",
+        "title": "XSS reviewer",
+        "description": "Completed the review without using a hint.",
+        "condition": {
+          "type": "no-hints"
+        }
+      },
+      {
+        "id": "context-recall",
+        "icon": "↺",
+        "title": "Context recall",
+        "description": "Recognized unsafe markup insertion in a second UI component.",
+        "condition": {
+          "type": "retrieval-wins-at-least",
+          "value": 1
+        }
+      },
+      {
+        "id": "xss-cleared",
+        "icon": "✓",
+        "title": "Rendering cleared",
+        "description": "Resolved every configured open risk.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      }
+    ]
+  },
+  "initialState": {
+    "rendererSafe": false,
+    "helperSafe": false
+  },
+  "workspace": {
+    "title": "Merge request !241 · guest-profile-web",
+    "status": "Front-end review in progress"
+  },
+  "files": [
+    {
+      "id": "welcome-view",
+      "path": "src/profile/renderWelcome.ts",
+      "language": "TypeScript",
+      "badge": "changed",
+      "initialVersion": "unsafe-html",
+      "versions": {
+        "unsafe-html": "export function renderWelcome(displayName: string) {\n  const label = document.querySelector(\"#welcome\");\n  label.innerHTML = \"<strong>Welcome, \" + displayName + \"</strong>\";\n}",
+        "unsafe-attribute": "export function renderWelcome(displayName: string) {\n  const label = document.querySelector(\"#welcome\");\n  label.innerHTML = \"<span title='\" + displayName + \"'>Welcome</span>\";\n}",
+        "safe": "export function renderWelcome(displayName: string) {\n  const label = document.querySelector(\"#welcome\");\n  label.textContent = \"Welcome, \" + displayName;\n}"
+      }
+    },
+    {
+      "id": "notice-helper",
+      "path": "src/ui/showNotice.ts",
+      "language": "TypeScript",
+      "badge": "shared helper",
+      "hidden": true,
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "export function showNotice(message: string) {\n  document.querySelector(\"#notice\").innerHTML = message;\n}",
+        "safe": "export function showNotice(message: string) {\n  document.querySelector(\"#notice\").textContent = message;\n}"
+      }
+    },
+    {
+      "id": "browser-check",
+      "path": "security/browser-render-check.txt",
+      "language": "text",
+      "badge": "finding",
+      "hidden": true,
+      "content": "Simulated browser review\nWelcome component: corrected output handling detected\nShared notice helper: untrusted message is assigned to innerHTML\nAction: review the shared helper before approving the change"
+    }
+  ],
+  "variants": [
+    {
+      "id": "html-body",
+      "fileVersions": {
+        "welcome-view": "unsafe-html"
+      },
+      "workspaceOverride": {
+        "status": "Front-end review · HTML-body rendering under review"
+      }
+    },
+    {
+      "id": "attribute-template",
+      "fileVersions": {
+        "welcome-view": "unsafe-attribute"
+      },
+      "workspaceOverride": {
+        "status": "Front-end review · attribute template under review"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "inspect-welcome-renderer",
+      "type": "select-lines",
+      "typeLabel": "Inspect",
+      "title": "Find the browser write that can execute untrusted content",
+      "instruction": "Select the line that sends a guest-provided value to a markup-interpreting browser API.",
+      "visibleFiles": ["welcome-view"],
+      "focusFile": "welcome-view",
+      "correctSelections": ["welcome-view:3"],
+      "hints": [
+        "Consider whether the API treats the display name as text or as browser markup.",
+        "Find the write that uses innerHTML with the untrusted value."
+      ],
+      "feedback": {
+        "correct": "You found the unsafe browser write. The value may look like a name, but it is still untrusted input until it is handled for its output context.",
+        "incorrect": "Look for the line that gives an untrusted value to an API that interprets markup."
+      },
+      "feedbackByMissing": {
+        "welcome-view:3": "innerHTML parses its string as markup. Do not join an untrusted display name into markup or an attribute template."
+      },
+      "concept": {
+        "id": "contextual-encoding",
+        "label": "Render untrusted output for its destination context"
+      }
+    },
+    {
+      "id": "choose-rendering-correction",
+      "type": "single-choice",
+      "typeLabel": "Correct",
+      "title": "Choose the safe rendering approach",
+      "instruction": "Choose the correction that preserves the greeting without treating the display name as executable markup.",
+      "visibleFiles": ["welcome-view"],
+      "focusFile": "welcome-view",
+      "correctIds": ["text-or-trusted-encoder"],
+      "choices": [
+        {
+          "id": "manual-escape",
+          "label": "Replace angle brackets manually and keep using innerHTML",
+          "detail": "Maintain a small list of characters to escape.",
+          "feedback": "Hand-rolled escaping is easy to get wrong and does not generalize across HTML, attributes, JavaScript, URLs and CSS."
+        },
+        {
+          "id": "text-or-trusted-encoder",
+          "label": "Render the value as text, or use the framework's trusted encoder for the exact output context",
+          "detail": "Use textContent when markup is unnecessary; use the framework's context-aware mechanism when it is required."
+        },
+        {
+          "id": "csp-only",
+          "label": "Keep the markup write and rely only on Content-Security-Policy",
+          "feedback": "A Content-Security-Policy is useful defence in depth, but it does not make unsafe rendering an acceptable primary control."
+        }
+      ],
+      "hints": [
+        "The best primary defence makes the browser treat the name as data.",
+        "Choose the option that avoids hand-built escaping and matches handling to the output context."
+      ],
+      "feedback": {
+        "correct": "The correction makes the browser display the value as data. Trusted framework encoders are the alternative when a specific markup context is genuinely needed.",
+        "incorrect": "That approach still relies on fragile escaping or on a secondary control instead of safely handling the output."
+      },
+      "onCorrect": {
+        "resolveSignals": ["unsafe-dom-write", "context-mismatch"],
+        "openSignals": ["template-regression"],
+        "fileVersions": {
+          "welcome-view": "safe"
+        },
+        "unlockFiles": ["notice-helper", "browser-check"],
+        "setState": {
+          "rendererSafe": true
+        },
+        "workspaceStatus": "Welcome renderer corrected · shared-helper finding requires review"
+      },
+      "concept": {
+        "id": "browser-output",
+        "label": "Use a browser API that treats untrusted values as text"
+      }
+    },
+    {
+      "id": "run-browser-checks",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Run the simulated browser-safety checks",
+      "instruction": "Verify the changed component and inspect the remaining helper finding before you clear the review.",
+      "runPrompt": "Run browser rendering checks.",
+      "visibleFiles": ["welcome-view", "notice-helper", "browser-check"],
+      "focusFile": "browser-check",
+      "checks": [
+        {
+          "label": "Welcome component render test",
+          "results": [
+            {
+              "when": {
+                "key": "rendererSafe",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The display name is rendered as text instead of interpreted markup."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The welcome component still sends an untrusted value to a markup parser."
+            }
+          ]
+        },
+        {
+          "label": "Shared-component scan",
+          "results": [
+            {
+              "status": "fail",
+              "message": "The shared notice helper still writes its message through innerHTML."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "failed": "The changed component is safer, but a reusable helper repeats the same pattern. Inspect it before approving the merge."
+      }
+    },
+    {
+      "id": "recall-notice-helper",
+      "type": "select-lines",
+      "typeLabel": "Recall",
+      "title": "Find the rendering regression in the shared helper",
+      "instruction": "Select the line that repeats the unsafe browser-write pattern in this different component.",
+      "visibleFiles": ["notice-helper", "browser-check"],
+      "focusFile": "notice-helper",
+      "correctSelections": ["notice-helper:2"],
+      "hints": [
+        "The helper's message can be untrusted too.",
+        "Look for the API that parses message text as markup."
+      ],
+      "feedback": {
+        "correct": "You applied the same output-handling rule in a new component. Reusable UI code needs the same context-aware protection as a feature-specific view.",
+        "incorrect": "The unsafe line gives the message to innerHTML instead of rendering it as text."
+      },
+      "feedbackByMissing": {
+        "notice-helper:2": "The helper passes the message to innerHTML. Use a text-rendering API or a trusted context-aware renderer."
+      },
+      "onCorrect": {
+        "resolveSignals": ["template-regression"],
+        "fileVersions": {
+          "notice-helper": "safe"
+        },
+        "setState": {
+          "helperSafe": true
+        },
+        "workspaceStatus": "Browser rendering review clear"
+      },
+      "concept": {
+        "id": "contextual-encoding",
+        "label": "Render untrusted output for its destination context",
+        "retrieval": true
+      }
+    }
+  ],
+  "completion": {
+    "eyebrow": "Rendering review clear",
+    "title": "Guest text stays data, not markup",
+    "message": "You removed unsafe rendering from the feature, verified the result and recognized the same XSS pattern in a shared helper.",
+    "takeaways": [
+      "Untrusted input can be dangerous when it is displayed, not only when it is received.",
+      "Choose output handling for the exact destination: HTML text, attribute, JavaScript, URL or CSS.",
+      "Use trusted framework encoders and defence-in-depth controls instead of hand-rolled escaping."
+    ]
+  },
+  "sourceBasis": [
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 2: Validate Input and Encode Output",
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 5: Secure Code Review"
+  ]
+}

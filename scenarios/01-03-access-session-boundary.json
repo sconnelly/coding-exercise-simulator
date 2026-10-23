@@ -1,0 +1,351 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "access-session-boundary",
+    "title": "Order Access: Enforce the Server Boundary",
+    "subtitle": "Replace client-controlled access checks with server-side least privilege and a hardened session cookie.",
+    "role": "API and session reviewer",
+    "estimatedMinutes": 6,
+    "difficulty": "Applied"
+  },
+  "brief": {
+    "role": "You are reviewing a fictional guest-order API and its session helper.",
+    "context": "The UI hides the order view for most users, but the API is using a client-controlled value to make an authorization decision. Review the server boundary and the session cookie, then check for a similar gap in a support route.",
+    "safetyNote": "Training data only. All account and order references are fictional. Do not include real guest data, session tokens or secrets in code, logs or AI prompts."
+  },
+  "mission": {
+    "eyebrow": "Mission 03 · Access and sessions",
+    "objective": "Enforce authorization on the server with least privilege and protect the session at the cookie boundary.",
+    "activeLabel": "Access risk open",
+    "clearLabel": "Access controls verified",
+    "riskSignals": [
+      {
+        "id": "server-authorization",
+        "label": "Client-controlled authorization decision",
+        "initial": "open"
+      },
+      {
+        "id": "data-scope",
+        "label": "Order data not scoped to the signed-in guest",
+        "initial": "open"
+      },
+      {
+        "id": "session-cookie",
+        "label": "Session cookie lacks protective flags",
+        "initial": "open"
+      },
+      {
+        "id": "support-regression",
+        "label": "Support route lacks a server-side check",
+        "initial": "dormant"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "access-reviewer",
+        "icon": "◆",
+        "title": "Access reviewer",
+        "description": "Completed the mission without using a hint.",
+        "condition": {
+          "type": "no-hints"
+        }
+      },
+      {
+        "id": "boundary-spotter",
+        "icon": "↺",
+        "title": "Boundary spotter",
+        "description": "Recognized a missing server check in a second route.",
+        "condition": {
+          "type": "retrieval-wins-at-least",
+          "value": 1
+        }
+      },
+      {
+        "id": "access-cleared",
+        "icon": "✓",
+        "title": "Access cleared",
+        "description": "Resolved every configured open risk.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      }
+    ]
+  },
+  "initialState": {
+    "accessControlsApplied": false,
+    "supportRouteSecured": false
+  },
+  "workspace": {
+    "title": "Merge request !256 · order-history-service",
+    "status": "API access review in progress"
+  },
+  "files": [
+    {
+      "id": "order-route",
+      "path": "src/routes/orderById.ts",
+      "language": "TypeScript",
+      "badge": "changed",
+      "initialVersion": "unsafe-header",
+      "versions": {
+        "unsafe-header": "router.get(\"/orders/:id\", requireSignedIn, async (req, res) => {\n  const requestedGuest = req.get(\"x-guest-id\");\n  const order = await orders.findById(req.params.id);\n  if (requestedGuest !== order.guestId) return res.status(403).end();\n  res.json(order);\n});",
+        "unsafe-ui-flag": "router.get(\"/orders/:id\", requireSignedIn, async (req, res) => {\n  const isOwner = req.get(\"x-ui-owner\") === \"true\";\n  const order = await orders.findById(req.params.id);\n  if (!isOwner) return res.status(403).end();\n  res.json(order);\n});",
+        "safe": "router.get(\"/orders/:id\", requireSignedIn, async (req, res) => {\n  const order = await orders.findById(req.params.id);\n  if (!order || order.guestId !== req.user.guestId || !req.user.permissions.includes(\"orders:read\")) return res.status(403).end();\n  res.json(order);\n});"
+      }
+    },
+    {
+      "id": "session-helper",
+      "path": "src/auth/setSession.ts",
+      "language": "TypeScript",
+      "badge": "changed",
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "export function setSession(res, token) {\n  res.cookie(\"session\", token);\n}",
+        "safe": "export function setSession(res, token) {\n  res.cookie(\"session\", token, { httpOnly: true, secure: true, sameSite: \"strict\", maxAge: 900000 });\n}"
+      }
+    },
+    {
+      "id": "support-route",
+      "path": "src/routes/supportOrder.ts",
+      "language": "TypeScript",
+      "badge": "later finding",
+      "hidden": true,
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "router.get(\"/support/orders/:id\", requireSignedIn, async (req, res) => {\n  res.json(await orders.findById(req.params.id));\n});",
+        "safe": "router.get(\"/support/orders/:id\", requireSignedIn, async (req, res) => {\n  const order = await orders.findById(req.params.id);\n  if (!order || !req.user.permissions.includes(\"support:orders\") || order.guestId !== req.user.guestId) return res.status(403).end();\n  res.json(order);\n});"
+      }
+    },
+    {
+      "id": "access-check",
+      "path": "security/access-check.txt",
+      "language": "text",
+      "badge": "finding",
+      "hidden": true,
+      "content": "Simulated authorization review\nGuest route: server identity and resource scope now checked\nSession helper: protective cookie flags detected\nSupport route: endpoint returns an order without a server-side permission or resource check"
+    }
+  ],
+  "variants": [
+    {
+      "id": "request-header",
+      "fileVersions": {
+        "order-route": "unsafe-header"
+      },
+      "workspaceOverride": {
+        "status": "API access review · request header under review"
+      }
+    },
+    {
+      "id": "ui-flag",
+      "fileVersions": {
+        "order-route": "unsafe-ui-flag"
+      },
+      "stageOverrides": {
+        "inspect-access-boundary": {
+          "feedbackByMissing": {
+            "order-route:2": "A UI-derived flag can be controlled outside the server's trusted identity and authorization boundary.",
+            "order-route:4": "This check enforces a client claim rather than the signed-in identity and its permitted resource scope."
+          }
+        }
+      },
+      "workspaceOverride": {
+        "status": "API access review · UI-derived flag under review"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "inspect-access-boundary",
+      "type": "select-lines",
+      "typeLabel": "Inspect",
+      "title": "Mark every line that weakens the access or session boundary",
+      "instruction": "Select the client-controlled authorization evidence and the session-cookie write that need correction.",
+      "visibleFiles": ["order-route", "session-helper"],
+      "focusFile": "order-route",
+      "correctSelections": ["order-route:2", "order-route:4", "session-helper:2"],
+      "hints": [
+        "A hidden UI element or a value supplied in the request is not a server-side access control.",
+        "Check both the value used to decide access and the cookie options used for the session."
+      ],
+      "feedback": {
+        "correct": "You found the client-controlled authorization path and the session cookie without protective flags.",
+        "incorrect": "Review what the server trusts to authorize the order and how the cookie is set."
+      },
+      "feedbackByMissing": {
+        "order-route:2": "The requester can control this header or UI-derived value. It is not a trustworthy authorization attribute.",
+        "order-route:4": "This check enforces a client claim rather than the signed-in identity and its permitted resource scope.",
+        "session-helper:2": "A session cookie needs secure attributes so browser script cannot read it, it is HTTPS-only and cross-site sending is limited."
+      },
+      "concept": {
+        "id": "server-side-authorization",
+        "label": "Authorize sensitive actions on the server"
+      }
+    },
+    {
+      "id": "select-access-controls",
+      "type": "multi-choice",
+      "typeLabel": "Correct",
+      "title": "Select every control the correction requires",
+      "instruction": "Choose the controls that enforce least privilege and improve the session boundary.",
+      "visibleFiles": ["order-route", "session-helper"],
+      "focusFile": "order-route",
+      "correctIds": ["server-identity", "resource-scope", "cookie-flags"],
+      "choices": [
+        {
+          "id": "server-identity",
+          "label": "Use the authenticated server-side identity and permissions for the authorization decision",
+          "feedbackIfMissed": "A request header or UI state cannot stand in for the authenticated identity maintained by the server."
+        },
+        {
+          "id": "resource-scope",
+          "label": "Verify the requested order belongs to the authorized guest before returning it",
+          "feedbackIfMissed": "A valid sign-in alone does not authorize every order. Scope the resource to the least privilege needed."
+        },
+        {
+          "id": "cookie-flags",
+          "label": "Set HttpOnly, Secure and SameSite cookie flags with a short session lifetime",
+          "feedbackIfMissed": "The session boundary needs browser-enforced protections as well as a reasonable lifetime."
+        },
+        {
+          "id": "hide-link",
+          "label": "Hide the order link for users who should not see it",
+          "feedbackIfSelected": "Hiding a UI element can improve the experience, but a caller can still invoke the endpoint directly. It is not the access control."
+        }
+      ],
+      "hints": [
+        "Think about identity, resource ownership and the cookie boundary.",
+        "A complete correction puts authorization on the server and does not treat the UI as the enforcement point."
+      ],
+      "feedback": {
+        "correct": "The correction uses server-controlled identity and least-privilege resource checks, then hardens the session cookie.",
+        "incorrect": "One or more selected controls leave authorization in the client or omit an important session protection."
+      },
+      "onCorrect": {
+        "resolveSignals": ["server-authorization", "data-scope", "session-cookie"],
+        "openSignals": ["support-regression"],
+        "fileVersions": {
+          "order-route": "safe",
+          "session-helper": "safe"
+        },
+        "unlockFiles": ["support-route", "access-check"],
+        "setState": {
+          "accessControlsApplied": true
+        },
+        "workspaceStatus": "Primary access controls applied · support-route finding requires review"
+      },
+      "concept": {
+        "id": "least-privilege",
+        "label": "Grant and check only the access required for the resource"
+      }
+    },
+    {
+      "id": "run-access-checks",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Run the simulated access checks",
+      "instruction": "Verify the corrected guest route and cookie, then inspect the remaining route finding before clearing the review.",
+      "runPrompt": "Run authorization and session checks.",
+      "visibleFiles": ["order-route", "session-helper", "support-route", "access-check"],
+      "focusFile": "access-check",
+      "checks": [
+        {
+          "label": "Guest resource authorization",
+          "results": [
+            {
+              "when": {
+                "key": "accessControlsApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The route uses the signed-in identity, permission and order ownership to make its server-side decision."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The route still depends on a value the caller can control."
+            }
+          ]
+        },
+        {
+          "label": "Session cookie review",
+          "results": [
+            {
+              "when": {
+                "key": "accessControlsApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The session cookie includes HttpOnly, Secure and SameSite protections with a bounded lifetime."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The session cookie does not yet include the required protective options."
+            }
+          ]
+        },
+        {
+          "label": "Support route review",
+          "results": [
+            {
+              "status": "fail",
+              "message": "The support route returns an order without a server-side authorization and ownership check."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "failed": "The main route and cookie are safer, but verification found another endpoint that bypasses the same server boundary."
+      }
+    },
+    {
+      "id": "recall-support-route",
+      "type": "select-lines",
+      "typeLabel": "Recall",
+      "title": "Find the missing check in the support route",
+      "instruction": "Select the line that returns a sensitive resource without first confirming server-side permission and scope.",
+      "visibleFiles": ["support-route", "access-check"],
+      "focusFile": "support-route",
+      "correctSelections": ["support-route:2"],
+      "hints": [
+        "The route must establish permission and resource scope before it sends an order.",
+        "Find the return path that has no server-side guard."
+      ],
+      "feedback": {
+        "correct": "You recognized that every sensitive endpoint needs its own server-side authorization check, even when another UI or route already appears protected.",
+        "incorrect": "The unsafe line returns the order before the server confirms permission and resource ownership."
+      },
+      "feedbackByMissing": {
+        "support-route:2": "This endpoint returns an order immediately. Add server-side permission and resource-scope checks before the response."
+      },
+      "onCorrect": {
+        "resolveSignals": ["support-regression"],
+        "fileVersions": {
+          "support-route": "safe"
+        },
+        "setState": {
+          "supportRouteSecured": true
+        },
+        "workspaceStatus": "Access review clear"
+      },
+      "concept": {
+        "id": "server-side-authorization",
+        "label": "Authorize sensitive actions on the server",
+        "retrieval": true
+      }
+    }
+  ],
+  "completion": {
+    "eyebrow": "Access review clear",
+    "title": "The server owns the authorization decision",
+    "message": "You moved access decisions to the server, scoped data to the signed-in guest, hardened the session cookie and caught a similar endpoint regression.",
+    "takeaways": [
+      "A hidden UI element, client flag or request header is not an authorization control.",
+      "Check permission and resource ownership on the server for every sensitive action.",
+      "Use short-lived sessions and secure cookie flags: HttpOnly, Secure and SameSite."
+    ]
+  },
+  "sourceBasis": [
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 3: Protect Access, Sessions, and Secrets",
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 6: End-to-End Scenario"
+  ]
+}

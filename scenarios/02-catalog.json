@@ -1,0 +1,72 @@
+{
+  "title": "Secrets Management Missions",
+  "eyebrow": "Secure engineering practice",
+  "subtitle": "Five configurable missions that reinforce secure secret handling across code, CI/CD, infrastructure, incident response and AI-assisted work.",
+  "scenarios": [
+    {
+      "file": "02-01-release-gate.json",
+      "number": "01",
+      "title": "Release Gate: Stop the Secret From Shipping",
+      "summary": "Review a Node.js merge request, remove linked exposure paths and verify the correction.",
+      "difficulty": "Applied",
+      "minutes": 7,
+      "tags": [
+        "Code review",
+        "Runtime retrieval",
+        "Verification"
+      ]
+    },
+    {
+      "file": "02-02-pipeline-containment.json",
+      "number": "02",
+      "title": "Pipeline Containment: The Masked Value Trap",
+      "summary": "Make a pipeline decision, see the consequence, investigate the evidence and recover safely.",
+      "difficulty": "Applied",
+      "minutes": 8,
+      "tags": [
+        "GitLab CI/CD",
+        "Fail-forward",
+        "Artifacts"
+      ]
+    },
+    {
+      "file": "02-03-terraform-boundary.json",
+      "number": "03",
+      "title": "Terraform Boundary: Redacted Is Not Removed",
+      "summary": "Interpret sensitive handling correctly and keep secret material out of source, plans and shared artefacts.",
+      "difficulty": "Applied",
+      "minutes": 6,
+      "tags": [
+        "Terraform",
+        "Plan/state",
+        "Verification"
+      ]
+    },
+    {
+      "file": "02-04-exposure-response.json",
+      "number": "04",
+      "title": "Exposure Response: Contain Before Cleanup",
+      "summary": "Respond to a scanner finding using the correct priority for active or already-inactive credentials.",
+      "difficulty": "Challenge",
+      "minutes": 7,
+      "tags": [
+        "Git history",
+        "Rotation",
+        "Response"
+      ]
+    },
+    {
+      "file": "02-05-ai-context-control.json",
+      "number": "05",
+      "title": "AI Context Control: Share the Problem, Not the Secret",
+      "summary": "Control assistant context, review generated code and respond safely to suspected disclosure.",
+      "difficulty": "Challenge",
+      "minutes": 8,
+      "tags": [
+        "AI-assisted work",
+        "Context",
+        "Generated code"
+      ]
+    }
+  ]
+}

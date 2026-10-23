@@ -1,0 +1,321 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "input-validation-query",
+    "title": "Order Lookup: Validate and Parameterize",
+    "subtitle": "Review untrusted request input, correct unsafe query construction and verify the pattern did not return elsewhere.",
+    "role": "Merge request reviewer",
+    "estimatedMinutes": 6,
+    "difficulty": "Applied"
+  },
+  "brief": {
+    "role": "You are reviewing a fictional TypeScript order-lookup change before merge.",
+    "context": "The endpoint accepts an order identifier from a request. Inspect how the value is handled, request the right correction, then use the simulated checks to find a similar regression in a shared helper.",
+    "safetyNote": "Training data only. The files contain fictional code and no real guest, employee or production data."
+  },
+  "mission": {
+    "eyebrow": "Mission 01 · Input and query safety",
+    "objective": "Ensure untrusted request values are validated and bound as data, not interpreted as SQL.",
+    "activeLabel": "Merge blocked",
+    "clearLabel": "Ready for review",
+    "riskSignals": [
+      {
+        "id": "server-validation",
+        "label": "Server-side validation missing",
+        "initial": "open"
+      },
+      {
+        "id": "query-concatenation",
+        "label": "Input concatenated into SQL",
+        "initial": "open"
+      },
+      {
+        "id": "helper-regression",
+        "label": "Unsafe shared query helper",
+        "initial": "dormant"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "clean-inspection",
+        "icon": "◆",
+        "title": "Clean inspection",
+        "description": "Completed the mission without using a hint.",
+        "condition": {
+          "type": "no-hints"
+        }
+      },
+      {
+        "id": "query-pattern-spotter",
+        "icon": "↺",
+        "title": "Query pattern spotter",
+        "description": "Recognized the same unsafe query pattern in a different artifact.",
+        "condition": {
+          "type": "retrieval-wins-at-least",
+          "value": 1
+        }
+      },
+      {
+        "id": "query-review-cleared",
+        "icon": "✓",
+        "title": "Query review cleared",
+        "description": "Resolved every configured open risk.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      }
+    ]
+  },
+  "initialState": {
+    "primaryFixApplied": false,
+    "regressionRemoved": false
+  },
+  "workspace": {
+    "title": "Merge request !218 · guest-order-api",
+    "status": "Review in progress"
+  },
+  "files": [
+    {
+      "id": "order-route",
+      "path": "src/routes/orders.ts",
+      "language": "TypeScript",
+      "badge": "changed",
+      "initialVersion": "unsafe-path",
+      "versions": {
+        "unsafe-path": "router.get(\"/orders/:id\", async (req, res) => {\n  const id = req.params.id;\n  if (!id) return res.status(400).send(\"Missing order id\");\n  const sql = \"SELECT id, total FROM orders WHERE id = '\" + id + \"'\";\n  const [rows] = await db.query(sql);\n  res.json(rows);\n});",
+        "unsafe-query": "router.get(\"/orders\", async (req, res) => {\n  const id = req.query.id;\n  if (!id) return res.status(400).send(\"Missing order id\");\n  const sql = \"SELECT id, total FROM orders WHERE id = '\" + id + \"'\";\n  const [rows] = await db.query(sql);\n  res.json(rows);\n});",
+        "safe": "router.get(\"/orders/:id\", async (req, res) => {\n  const id = Number(req.params.id);\n  if (!Number.isInteger(id) || id <= 0) return res.status(400).send(\"Invalid order id\");\n  const [rows] = await db.query(\"SELECT id, total FROM orders WHERE id = ?\", [id]);\n  res.json(rows);\n});"
+      }
+    },
+    {
+      "id": "query-helper",
+      "path": "src/data/findOrder.ts",
+      "language": "TypeScript",
+      "badge": "shared helper",
+      "hidden": true,
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "export async function findOrder(db, id) {\n  return db.query(\"SELECT * FROM orders WHERE id = '\" + id + \"'\");\n}",
+        "safe": "export async function findOrder(db, id) {\n  return db.query(\"SELECT * FROM orders WHERE id = ?\", [id]);\n}"
+      }
+    },
+    {
+      "id": "scan-report",
+      "path": "security/query-scan.txt",
+      "language": "text",
+      "badge": "finding",
+      "hidden": true,
+      "content": "Simulated query review\nRoute change: validation and bound parameter detected\nShared helper: string-built query remains in src/data/findOrder.ts\nAction: inspect the helper before approving the merge request"
+    }
+  ],
+  "variants": [
+    {
+      "id": "path-parameter",
+      "fileVersions": {
+        "order-route": "unsafe-path"
+      },
+      "workspaceOverride": {
+        "status": "Review in progress · route parameter under review"
+      }
+    },
+    {
+      "id": "query-parameter",
+      "fileVersions": {
+        "order-route": "unsafe-query"
+      },
+      "workspaceOverride": {
+        "status": "Review in progress · query parameter under review"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "inspect-order-route",
+      "type": "select-lines",
+      "typeLabel": "Inspect",
+      "title": "Mark every line that leaves request input unsafe",
+      "instruction": "Select the lines that accept unvalidated input or turn it into executable SQL.",
+      "visibleFiles": ["order-route"],
+      "focusFile": "order-route",
+      "correctSelections": ["order-route:2", "order-route:4"],
+      "hints": [
+        "Client and route parameters are untrusted even when the user is signed in.",
+        "Look for the value entering the route and for a query built by joining that value into SQL."
+      ],
+      "feedback": {
+        "correct": "You found both parts of the problem: the request value is not validated for the expected type and it is concatenated into a SQL string.",
+        "incorrect": "Review both how the request value enters the route and how the database receives it."
+      },
+      "feedbackByMissing": {
+        "order-route:2": "A request parameter is not proof of a valid positive order identifier. Validate type, format and range on the server.",
+        "order-route:4": "Concatenating the value into the query lets untrusted input be interpreted by the SQL interpreter."
+      },
+      "concept": {
+        "id": "parameterize-queries",
+        "label": "Validate input and bind it as query data"
+      }
+    },
+    {
+      "id": "choose-query-correction",
+      "type": "single-choice",
+      "typeLabel": "Correct",
+      "title": "Choose the correction to request",
+      "instruction": "Select the change that protects the route without relying on the client or a fragile character filter.",
+      "visibleFiles": ["order-route"],
+      "focusFile": "order-route",
+      "correctIds": ["validate-and-bind"],
+      "choices": [
+        {
+          "id": "strip-characters",
+          "label": "Remove quotes and semicolons, then keep the string-built query",
+          "detail": "Use a deny-list to remove known dangerous characters.",
+          "feedback": "Character stripping is a fragile deny-list. Encodings and edge cases can bypass it, and the query still treats input as code."
+        },
+        {
+          "id": "validate-and-bind",
+          "label": "Validate a positive integer on the server and use a parameterized query",
+          "detail": "Bind the order identifier as data rather than concatenating it into SQL."
+        },
+        {
+          "id": "authenticated-only",
+          "label": "Keep the query because the endpoint requires sign-in",
+          "feedback": "Authentication does not make request data trustworthy. An authenticated caller can still send malicious input."
+        }
+      ],
+      "hints": [
+        "The fix needs both a server-side allow-list check and a query API that binds values as data.",
+        "Choose the option that never joins the request value into the SQL text."
+      ],
+      "feedback": {
+        "correct": "The corrected route validates the expected identifier and passes it to the database as data, not code.",
+        "incorrect": "That option still relies on client trust, deny-listing or string-built SQL."
+      },
+      "onCorrect": {
+        "resolveSignals": ["server-validation", "query-concatenation"],
+        "openSignals": ["helper-regression"],
+        "fileVersions": {
+          "order-route": "safe"
+        },
+        "unlockFiles": ["query-helper", "scan-report"],
+        "setState": {
+          "primaryFixApplied": true
+        },
+        "workspaceStatus": "Route corrected · shared-helper finding requires review"
+      },
+      "concept": {
+        "id": "server-validation",
+        "label": "Server-side validation is required"
+      }
+    },
+    {
+      "id": "run-query-checks",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Run the simulated route checks",
+      "instruction": "Use the checks as evidence, then inspect the remaining finding rather than assuming the first correction cleared the whole change.",
+      "runPrompt": "Run query and input-safety checks.",
+      "visibleFiles": ["order-route", "query-helper", "scan-report"],
+      "focusFile": "scan-report",
+      "checks": [
+        {
+          "label": "Server input validation",
+          "results": [
+            {
+              "when": {
+                "key": "primaryFixApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The route rejects identifiers that are not positive integers."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The route still accepts an unvalidated request value."
+            }
+          ]
+        },
+        {
+          "label": "Route query construction",
+          "results": [
+            {
+              "when": {
+                "key": "primaryFixApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The route binds the identifier as a query parameter."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The route still constructs SQL by joining input into query text."
+            }
+          ]
+        },
+        {
+          "label": "Shared helper scan",
+          "results": [
+            {
+              "status": "fail",
+              "message": "A shared helper still builds a query with string concatenation."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "failed": "The primary route is safer, but verification found the same pattern in a different artifact. Review the helper before clearing the merge."
+      }
+    },
+    {
+      "id": "recall-helper-pattern",
+      "type": "select-lines",
+      "typeLabel": "Recall",
+      "title": "Find the query regression in the shared helper",
+      "instruction": "Apply the same rule in this new context: select the line that treats an input value as part of SQL.",
+      "visibleFiles": ["query-helper", "scan-report"],
+      "focusFile": "query-helper",
+      "correctSelections": ["query-helper:2"],
+      "hints": [
+        "A helper does not make string-built SQL safe.",
+        "Find the line where the input value is joined into the query text."
+      ],
+      "feedback": {
+        "correct": "You recognized the same risk across a route and a shared helper. Parameterization is required wherever input reaches the database.",
+        "incorrect": "The unsafe pattern is the line that combines an input value with SQL text."
+      },
+      "feedbackByMissing": {
+        "query-helper:2": "The helper concatenates its id argument into SQL. Bind the value through the database API instead."
+      },
+      "onCorrect": {
+        "resolveSignals": ["helper-regression"],
+        "fileVersions": {
+          "query-helper": "safe"
+        },
+        "setState": {
+          "regressionRemoved": true
+        },
+        "workspaceStatus": "Query review clear"
+      },
+      "concept": {
+        "id": "parameterize-queries",
+        "label": "Validate input and bind it as query data",
+        "retrieval": true
+      }
+    }
+  ],
+  "completion": {
+    "eyebrow": "Query review clear",
+    "title": "The lookup handles input as data",
+    "message": "You validated untrusted input, used a parameterized query and recognized the same risk when it reappeared in a shared helper.",
+    "takeaways": [
+      "Client controls and authentication do not replace server-side validation.",
+      "Use allow-lists for expected type, format and range before a value reaches a sensitive operation.",
+      "Bind query values as data; never concatenate untrusted input into SQL."
+    ]
+  },
+  "sourceBasis": [
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 2: Validate Input and Encode Output",
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 6: End-to-End Scenario"
+  ]
+}

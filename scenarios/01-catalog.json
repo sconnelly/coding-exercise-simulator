@@ -1,0 +1,52 @@
+{
+  "title": "Secure Coding Techniques Missions",
+  "eyebrow": "Applied secure engineering practice",
+  "subtitle": "Five configurable missions that help engineers recognize, remediate and verify secure coding decisions before code reaches guests.",
+  "scenarios": [
+    {
+      "file": "01-01-input-validation-query.json",
+      "number": "01",
+      "title": "Order Lookup: Validate and Parameterize",
+      "summary": "Review an order lookup endpoint, replace unsafe query construction and catch the same pattern in a helper.",
+      "difficulty": "Applied",
+      "minutes": 6,
+      "tags": ["Input validation", "SQL injection", "Code review"]
+    },
+    {
+      "file": "01-02-contextual-output-encoding.json",
+      "number": "02",
+      "title": "Guest Welcome: Render Data Safely",
+      "summary": "Review browser rendering code, choose an output-safe correction and find an XSS regression in a second component.",
+      "difficulty": "Applied",
+      "minutes": 6,
+      "tags": ["XSS", "Output encoding", "Verification"]
+    },
+    {
+      "file": "01-03-access-session-boundary.json",
+      "number": "03",
+      "title": "Order Access: Enforce the Server Boundary",
+      "summary": "Replace client-controlled access checks with least-privilege server controls and harden the session cookie.",
+      "difficulty": "Applied",
+      "minutes": 6,
+      "tags": ["Authorization", "Sessions", "Least privilege"]
+    },
+    {
+      "file": "01-04-safe-errors-logging.json",
+      "number": "04",
+      "title": "Payment Failure: Debug Without Disclosure",
+      "summary": "Protect the user-facing error path, remove sensitive log content and recover from a plausible partial fix.",
+      "difficulty": "Challenge",
+      "minutes": 6,
+      "tags": ["Error handling", "Logging", "Fail-forward"]
+    },
+    {
+      "file": "01-05-ai-assisted-release-review.json",
+      "number": "05",
+      "title": "AI Draft: Review Before You Merge",
+      "summary": "Apply the normal secure-review bar to an AI-generated order endpoint and preserve safe AI context controls.",
+      "difficulty": "Challenge",
+      "minutes": 6,
+      "tags": ["AI-assisted work", "Secure review", "SAST"]
+    }
+  ]
+}

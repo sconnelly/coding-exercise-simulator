@@ -130,37 +130,86 @@ def feature_coverage(data):
         'fail_forward': any(any(o.get('kind') == 'consequence' and o.get('advance') for o in s.get('outcomes', {}).values()) for s in stages),
     }
 
-catalog = json.loads((SCENARIOS / 'catalog.json').read_text())
-scenario_files = [SCENARIOS / item['file'] for item in catalog['scenarios']]
 errors = []
 coverage_union = {k: False for k in ['persistent_state','variants','mission_gamification','misconception_feedback','verification','retrieval_interleaving','fail_forward']}
 coverage_rows = []
+catalog_rows = []
+scenario_files = set()
 
-if len(scenario_files) != 5:
-    errors.append(f'catalog.json: expected 5 scenarios, found {len(scenario_files)}')
+catalog_index_path = SCENARIOS / 'catalogs.json'
+if not catalog_index_path.exists():
+    errors.append('catalogs.json: catalog index is missing')
+    catalogs = []
+else:
+    catalog_index = json.loads(catalog_index_path.read_text())
+    catalogs = catalog_index.get('catalogs', [])
+    if not isinstance(catalogs, list) or not catalogs:
+        errors.append('catalogs.json: no catalogs configured')
+        catalogs = []
 
-for path in scenario_files:
-    if not path.exists():
-        errors.append(f'catalog.json: missing scenario file {path.name}')
+catalog_ids = set()
+catalog_names = set()
+for catalog_entry in catalogs:
+    catalog_id = catalog_entry.get('id')
+    catalog_name = catalog_entry.get('file')
+    label = catalog_id or catalog_name or '<missing catalog>'
+    if not catalog_id:
+        errors.append(f'catalogs.json: catalog {label} is missing an id')
+    elif catalog_id in catalog_ids:
+        errors.append(f'catalogs.json: duplicate catalog id {catalog_id}')
+    else:
+        catalog_ids.add(catalog_id)
+    if not catalog_name:
+        errors.append(f'catalogs.json: catalog {label} is missing a file')
         continue
-    data = json.loads(path.read_text())
-    variants = data.get('variants') or [None]
-    if not variants:
-        variants = [None]
-    for variant in variants:
-        prepared = apply_variant(data, variant) if variant else data
-        errors.extend(validate_scenario(path, prepared, variant['id'] if variant else 'base'))
-    cov = feature_coverage(data)
-    coverage_rows.append((path.name, cov))
-    for key, value in cov.items():
-        coverage_union[key] |= value
+    if catalog_name in catalog_names:
+        errors.append(f'catalogs.json: duplicate catalog file {catalog_name}')
+        continue
+    catalog_names.add(catalog_name)
+
+    catalog_path = SCENARIOS / catalog_name
+    if not catalog_path.exists():
+        errors.append(f'catalogs.json: missing catalog file {catalog_name}')
+        continue
+    catalog = json.loads(catalog_path.read_text())
+    scenarios = catalog.get('scenarios', [])
+    if not isinstance(scenarios, list) or not scenarios:
+        errors.append(f'{catalog_name}: no scenarios configured')
+        continue
+    catalog_rows.append((catalog_name, len(scenarios)))
+
+    for item in scenarios:
+        scenario_name = item.get('file')
+        if not scenario_name:
+            errors.append(f'{catalog_name}: scenario entry is missing a file')
+            continue
+        path = SCENARIOS / scenario_name
+        if path in scenario_files:
+            errors.append(f'{catalog_name}: scenario file {scenario_name} is registered more than once')
+            continue
+        scenario_files.add(path)
+        if not path.exists():
+            errors.append(f'{catalog_name}: missing scenario file {scenario_name}')
+            continue
+        data = json.loads(path.read_text())
+        variants = data.get('variants') or [None]
+        for variant in variants:
+            prepared = apply_variant(data, variant) if variant else data
+            errors.extend(validate_scenario(path, prepared, variant['id'] if variant else 'base'))
+        cov = feature_coverage(data)
+        coverage_rows.append((catalog_name, path.name, cov))
+        for key, value in cov.items():
+            coverage_union[key] |= value
 
 print('Scenario validation')
 print('===================')
-print(f'Catalog scenarios: {len(scenario_files)}')
-for name, cov in coverage_rows:
+print(f'Catalogs: {len(catalog_rows)}')
+for name, count in catalog_rows:
+    print(f'- {name}: {count} scenarios')
+print(f'Total scenarios: {len(scenario_files)}')
+for catalog_name, name, cov in coverage_rows:
     present = ', '.join(k for k,v in cov.items() if v)
-    print(f'- {name}: {present}')
+    print(f'- {catalog_name} / {name}: {present}')
 print('\nTop-seven feature coverage')
 for key, value in coverage_union.items():
     print(f'- {key}: {"YES" if value else "NO"}')

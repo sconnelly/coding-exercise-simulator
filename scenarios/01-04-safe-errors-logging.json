@@ -1,0 +1,422 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "safe-errors-logging",
+    "title": "Payment Failure: Debug Without Disclosure",
+    "subtitle": "Protect the user-facing error path, remove sensitive log content and recover from a plausible partial correction.",
+    "role": "Service maintainer",
+    "estimatedMinutes": 6,
+    "difficulty": "Challenge"
+  },
+  "brief": {
+    "role": "You are reviewing error handling for a fictional payment request.",
+    "context": "The team wants enough information to debug a failure, but the current handler returns internal detail to the caller and records a request body plus authorization value. Decide what to change, observe the result of a partial fix and complete the safe logging review.",
+    "safetyNote": "Training data only. The authorization reference is a placeholder and no card, guest or production data is present."
+  },
+  "mission": {
+    "eyebrow": "Mission 04 · Errors and logging",
+    "objective": "Fail securely: return a generic client response, retain useful security events and keep sensitive values out of logs.",
+    "activeLabel": "Disclosure risk open",
+    "clearLabel": "Failure path safe",
+    "riskSignals": [
+      {
+        "id": "client-detail",
+        "label": "Internal error detail returned to client",
+        "initial": "open"
+      },
+      {
+        "id": "sensitive-log",
+        "label": "Sensitive request data in log entry",
+        "initial": "open"
+      },
+      {
+        "id": "log-copy",
+        "label": "Sensitive log copy requires containment",
+        "initial": "dormant"
+      },
+      {
+        "id": "event-coverage",
+        "label": "Safe security-event logging not reviewed",
+        "initial": "dormant"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "failure-path-reviewer",
+        "icon": "◆",
+        "title": "Failure-path reviewer",
+        "description": "Completed the mission without using a hint.",
+        "condition": {
+          "type": "no-hints"
+        }
+      },
+      {
+        "id": "safe-recovery",
+        "icon": "↺",
+        "title": "Safe recovery",
+        "description": "Recovered after seeing why a partial correction still leaks information.",
+        "condition": {
+          "type": "state-equals",
+          "key": "recoveredFromPartial",
+          "value": true
+        }
+      },
+      {
+        "id": "failure-path-cleared",
+        "icon": "✓",
+        "title": "Failure path cleared",
+        "description": "Resolved every configured open risk.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      }
+    ]
+  },
+  "initialState": {
+    "safeHandlingApplied": false,
+    "logLeak": false,
+    "auditEventsReviewed": false
+  },
+  "workspace": {
+    "title": "Incident fix · payment-request-service",
+    "status": "Failure-path review in progress"
+  },
+  "files": [
+    {
+      "id": "error-handler",
+      "path": "src/payments/charge.ts",
+      "language": "TypeScript",
+      "badge": "changed",
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "export async function charge(req, res) {\n  try {\n    await payments.charge(req.body);\n  } catch (err) {\n    logger.error(\"charge_failed\", { request: req.body, authorization: req.headers.authorization });\n    res.status(500).send(err.stack);\n  }\n}",
+        "partial": "export async function charge(req, res) {\n  try {\n    await payments.charge(req.body);\n  } catch (err) {\n    logger.error(\"charge_failed\", { request: req.body, authorization: req.headers.authorization });\n    res.status(500).send(\"Something went wrong. Please try again.\");\n  }\n}",
+        "safe": "export async function charge(req, res) {\n  try {\n    await payments.charge(req.body);\n  } catch (err) {\n    logger.error(\"charge_failed\", { orderId: hash(req.body.orderId), reason: err.code });\n    res.status(500).send(\"Something went wrong. Please try again.\");\n  }\n}"
+      }
+    },
+    {
+      "id": "incident-log",
+      "path": "logs/charge-failure-review.txt",
+      "language": "text",
+      "badge": "evidence",
+      "hidden": true,
+      "content": "Simulated log review\nA previous charge_failed entry contains a full request object and an authorization placeholder.\nA generic response did not remove the existing sensitive log copy.\nAction: remove unsafe logging from the code and follow the approved response process for the generated log copy."
+    },
+    {
+      "id": "audit-config",
+      "path": "review/security-events.ts",
+      "language": "TypeScript",
+      "badge": "review",
+      "hidden": true,
+      "content": "logger.warn(\"access_denied\", { userId: hash(req.user.id), resource: \"payment\" });\nlogger.warn(\"validation_failed\", { field: \"amount\" });\nlogger.info(\"payment_failed\", { orderId: hash(req.body.orderId), last4: \"4242\" });"
+    }
+  ],
+  "variants": [
+    {
+      "id": "authorization-header",
+      "workspaceOverride": {
+        "status": "Failure-path review · authorization value in log evidence"
+      }
+    },
+    {
+      "id": "request-body",
+      "briefOverride": {
+        "context": "The same handler records a whole request object during a failure. Review the client response and the server-side logging boundary before merge."
+      },
+      "workspaceOverride": {
+        "status": "Failure-path review · request-body logging under review"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "inspect-failure-path",
+      "type": "select-lines",
+      "typeLabel": "Inspect",
+      "title": "Mark the lines that disclose information on failure",
+      "instruction": "Select the server log write and client response that reveal more information than each audience should receive.",
+      "visibleFiles": ["error-handler"],
+      "focusFile": "error-handler",
+      "correctSelections": ["error-handler:5", "error-handler:6"],
+      "hints": [
+        "Errors have two audiences: the caller and internal operational monitoring.",
+        "Look for raw request or authorization data in the log and an exception detail returned to the caller."
+      ],
+      "feedback": {
+        "correct": "You found both disclosure paths. Users need a generic response; server logs need useful, non-sensitive event data.",
+        "incorrect": "Review both what reaches the client and what the diagnostic log retains."
+      },
+      "feedbackByMissing": {
+        "error-handler:5": "Request bodies and authorization values can contain sensitive data. Do not log them wholesale.",
+        "error-handler:6": "Returning a stack trace exposes implementation details that can help an attacker refine an attack."
+      },
+      "concept": {
+        "id": "safe-errors",
+        "label": "Use generic client errors and value-safe internal diagnostics"
+      }
+    },
+    {
+      "id": "choose-error-correction",
+      "type": "single-choice",
+      "typeLabel": "Correct",
+      "title": "Choose the complete failure-path correction",
+      "instruction": "Choose the change that protects both the user-facing response and the internal diagnostic record.",
+      "visibleFiles": ["error-handler"],
+      "focusFile": "error-handler",
+      "correctIds": ["safe-handler"],
+      "choices": [
+        {
+          "id": "generic-only",
+          "label": "Return a generic message but keep the full request and authorization value in the log",
+          "detail": "Protect the caller while preserving detailed diagnostics.",
+          "feedback": "This protects the client response, but the server log still stores an unnecessary sensitive copy."
+        },
+        {
+          "id": "safe-handler",
+          "label": "Return a generic message and log only a safe event identifier, hashed reference and error reason",
+          "detail": "Keep actionable diagnostics without raw request, token or card data."
+        },
+        {
+          "id": "stack-for-support",
+          "label": "Return the stack trace only to signed-in users",
+          "feedback": "Signed-in users are still users of the client response. Internal implementation detail belongs in appropriately protected server-side diagnostics."
+        }
+      ],
+      "outcomes": {
+        "generic-only": {
+          "kind": "consequence",
+          "advance": true,
+          "feedback": "The user now sees a generic message, but the simulated log review finds a durable copy of the full request and authorization value. You must contain the log exposure as well.",
+          "effects": {
+            "resolveSignals": ["client-detail"],
+            "openSignals": ["log-copy", "event-coverage"],
+            "fileVersions": {
+              "error-handler": "partial"
+            },
+            "unlockFiles": ["incident-log", "audit-config"],
+            "setState": {
+              "logLeak": true
+            },
+            "workspaceStatus": "Generic response applied · sensitive log finding requires recovery"
+          }
+        }
+      },
+      "hints": [
+        "The correction needs to protect both audiences, not only the browser response.",
+        "Choose the option that removes raw request and authorization data while preserving safe, useful evidence."
+      ],
+      "feedback": {
+        "correct": "The handler now fails safely for the caller and creates a value-safe diagnostic record for the service team.",
+        "incorrect": "That choice leaves either internal detail in the response or sensitive values in diagnostic output."
+      },
+      "onCorrect": {
+        "resolveSignals": ["client-detail", "sensitive-log"],
+        "openSignals": ["event-coverage"],
+        "fileVersions": {
+          "error-handler": "safe"
+        },
+        "unlockFiles": ["audit-config"],
+        "setState": {
+          "safeHandlingApplied": true
+        },
+        "workspaceStatus": "Safe error handling applied · audit-event review required"
+      },
+      "concept": {
+        "id": "sensitive-logging",
+        "label": "Keep raw sensitive values out of logs"
+      }
+    },
+    {
+      "id": "recover-log-exposure",
+      "type": "multi-choice",
+      "typeLabel": "Recover",
+      "title": "Recover from the sensitive log finding",
+      "instruction": "Select every action needed to correct the logging boundary and handle the simulated copy safely.",
+      "visibleFiles": ["error-handler", "incident-log", "audit-config"],
+      "focusFile": "incident-log",
+      "when": {
+        "key": "logLeak",
+        "equals": true
+      },
+      "correctIds": ["remove-raw-data", "safe-events", "generic-client"],
+      "choices": [
+        {
+          "id": "remove-raw-data",
+          "label": "Remove raw request and authorization values from the code path, then follow the approved response process for the log copy",
+          "feedbackIfMissed": "The unnecessary sensitive log field and the existing generated copy both need a response."
+        },
+        {
+          "id": "safe-events",
+          "label": "Keep a value-safe event record such as a hashed identifier and error reason",
+          "feedbackIfMissed": "Removing all diagnostics makes investigation harder. Preserve useful evidence without retaining secrets or raw personal data."
+        },
+        {
+          "id": "generic-client",
+          "label": "Keep the client response generic and fail closed",
+          "feedbackIfMissed": "The client must not receive implementation detail while the service handles the failure."
+        },
+        {
+          "id": "restricted-log",
+          "label": "Keep the full log entry but restrict access to the log viewer",
+          "feedbackIfSelected": "Access restriction does not remove the unnecessary sensitive copy or make wholesale request logging appropriate."
+        }
+      ],
+      "hints": [
+        "A generic user response alone does not solve a server-side logging leak.",
+        "Keep useful event evidence, but remove values that can identify, authenticate or expose a person or system."
+      ],
+      "feedback": {
+        "correct": "You corrected the code, preserved safe diagnostics and treated the previously generated log copy as an exposure requiring approved handling.",
+        "incorrect": "One or more selected actions still retain raw sensitive data or omit a required part of the recovery."
+      },
+      "onCorrect": {
+        "resolveSignals": ["sensitive-log", "log-copy"],
+        "fileVersions": {
+          "error-handler": "safe"
+        },
+        "setState": {
+          "safeHandlingApplied": true,
+          "logLeak": false,
+          "recoveredFromPartial": true
+        },
+        "workspaceStatus": "Sensitive-log recovery complete · audit-event review required"
+      },
+      "concept": {
+        "id": "safe-errors",
+        "label": "Use generic client errors and value-safe internal diagnostics",
+        "retrieval": true
+      }
+    },
+    {
+      "id": "run-failure-checks",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Run the simulated failure-path checks",
+      "instruction": "Verify the user-facing error and the diagnostic record, then review which safe security events should be retained.",
+      "runPrompt": "Run error-handling and log-safety checks.",
+      "visibleFiles": ["error-handler", "audit-config"],
+      "focusFile": "error-handler",
+      "checks": [
+        {
+          "label": "Client error response",
+          "results": [
+            {
+              "when": {
+                "key": "safeHandlingApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The client receives a generic error message with no stack trace or internal topology."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The failure path still exposes internal error detail to the caller."
+            }
+          ]
+        },
+        {
+          "label": "Diagnostic log review",
+          "results": [
+            {
+              "when": {
+                "key": "safeHandlingApplied",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The handler records a hashed reference and error reason instead of raw request or authorization data."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "The diagnostic log still retains sensitive request content."
+            }
+          ]
+        },
+        {
+          "label": "Security-event review",
+          "results": [
+            {
+              "status": "warn",
+              "message": "Safe event candidates are available. Review which events provide detection value without introducing sensitive data."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "passed": "The handler now protects both audiences. Complete the security-event review so the service remains observable without over-logging.",
+        "failed": "The simulated checks found an error or logging disclosure that requires correction."
+      }
+    },
+    {
+      "id": "review-security-events",
+      "type": "multi-choice",
+      "typeLabel": "Review",
+      "title": "Select the security events that are useful and safe to retain",
+      "instruction": "Select every event that supports detection without recording a full request, password, token or raw personal data.",
+      "visibleFiles": ["audit-config"],
+      "focusFile": "audit-config",
+      "correctIds": ["access-denied", "validation-failure", "masked-payment"],
+      "choices": [
+        {
+          "id": "access-denied",
+          "label": "Record an access-control denial with a hashed identifier and resource name",
+          "feedbackIfMissed": "Access denials are useful security events when identifiers are protected."
+        },
+        {
+          "id": "validation-failure",
+          "label": "Record a validation failure and the rejected field category",
+          "feedbackIfMissed": "Validation failures can support detection without storing the rejected value."
+        },
+        {
+          "id": "masked-payment",
+          "label": "Record a payment failure with a hashed order reference and an allowed masked value such as last four digits",
+          "feedbackIfMissed": "A minimal, masked record can support investigation without retaining full card or guest data."
+        },
+        {
+          "id": "full-request",
+          "label": "Attach the full request body to every failure log",
+          "feedbackIfSelected": "Request bodies can contain personal, financial or authentication data and should not be logged wholesale."
+        },
+        {
+          "id": "auth-header",
+          "label": "Store the authorization header so engineers can replay the request",
+          "feedbackIfSelected": "Authorization values are secrets and must never be retained for troubleshooting."
+        }
+      ],
+      "hints": [
+        "Security logs should support detection, not become a duplicate source of sensitive data.",
+        "Choose events that preserve a safe identifier, category, resource or masked value rather than a raw request or credential."
+      ],
+      "feedback": {
+        "correct": "You retained meaningful security events while keeping secrets, raw personal data and full request payloads out of the log.",
+        "incorrect": "One or more selected choices either omit useful detection evidence or retain sensitive information unnecessarily."
+      },
+      "onCorrect": {
+        "resolveSignals": ["event-coverage"],
+        "setState": {
+          "auditEventsReviewed": true
+        },
+        "workspaceStatus": "Failure-path review clear"
+      },
+      "concept": {
+        "id": "security-event-logging",
+        "label": "Log security events without logging sensitive values"
+      }
+    }
+  ],
+  "completion": {
+    "eyebrow": "Failure path safe",
+    "title": "The service can fail without disclosing",
+    "message": "You protected the client response, kept useful diagnostics value-safe and confirmed the security events that should remain observable.",
+    "takeaways": [
+      "Return generic failure messages to callers and keep implementation detail in protected server-side diagnostics.",
+      "Do not log whole request bodies, passwords, tokens, authorization headers or full sensitive values.",
+      "Log authentication, access-control and validation events safely so teams can detect misuse without creating a new disclosure path."
+    ]
+  },
+  "sourceBasis": [
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 4: Fail Securely: Errors and Logging",
+    "Technical Application of Secure Coding Techniques — Course Draft, Lesson 6: End-to-End Scenario"
+  ]
+}

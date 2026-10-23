@@ -1,0 +1,460 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "pipeline-containment",
+    "title": "Pipeline Containment: The Masked Value Trap",
+    "subtitle": "Make a pipeline decision, observe the simulated consequence and recover before the change is approved.",
+    "role": "GitLab pipeline reviewer",
+    "estimatedMinutes": 8,
+    "difficulty": "Applied"
+  },
+  "mission": {
+    "eyebrow": "Mission 02 · Pipeline containment",
+    "objective": "Keep the deployment credential out of repository configuration, job output and published artefacts while preserving an approved workload-retrieval path.",
+    "activeLabel": "At risk",
+    "clearLabel": "Contained",
+    "riskSignals": [
+      {
+        "id": "pipeline-source",
+        "label": "Credential in pipeline configuration",
+        "initial": "open"
+      },
+      {
+        "id": "pipeline-output",
+        "label": "Credential written to job output",
+        "initial": "open"
+      },
+      {
+        "id": "artifact-copy",
+        "label": "Credential copied into artifact",
+        "initial": "dormant"
+      },
+      {
+        "id": "retrieval-scope",
+        "label": "Retrieval boundary not reviewed",
+        "initial": "open"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "containment",
+        "icon": "✓",
+        "title": "Containment complete",
+        "description": "Resolved every open pipeline risk signal.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      },
+      {
+        "id": "recovery",
+        "icon": "↺",
+        "title": "Recovered safely",
+        "description": "Diagnosed and corrected a consequence after an unsafe pipeline decision.",
+        "condition": {
+          "type": "state-equals",
+          "key": "recoveredFromLeak",
+          "value": true
+        }
+      },
+      {
+        "id": "clean-run",
+        "icon": "◆",
+        "title": "Clean run",
+        "description": "Completed without revealing a solution.",
+        "condition": {
+          "type": "no-reveals"
+        }
+      }
+    ]
+  },
+  "brief": {
+    "role": "You are reviewing a fictional GitLab deployment job for a non-production payment service.",
+    "context": "The current job hard-codes and prints a token. You must decide how to correct it. One tempting shortcut is intentionally allowed to run forward so you can see why masking does not contain every copy.",
+    "safetyNote": "Training data only. Every credential-looking value is fictional. Never replace a placeholder with a real credential in this simulation, an AI tool, a ticket, chat, email, log, screenshot or support message. The Vault host and path are illustrative vendor-style values; actual roles, paths and authorization must follow current approved guidance."
+  },
+  "workspace": {
+    "title": "Merge request !291 · payment-deploy",
+    "status": "Pipeline review in progress"
+  },
+  "initialState": {
+    "pipelineSafe": false,
+    "pipelineLeak": false,
+    "recoveredFromLeak": false
+  },
+  "files": [
+    {
+      "id": "pipeline",
+      "path": ".gitlab-ci.yml",
+      "language": "YAML",
+      "badge": "changed",
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "deploy:\n  stage: deploy\n  script:\n    - export PAYMENT_TOKEN=\"FAKE_NOT_A_REAL_SECRET\"\n    - echo \"$PAYMENT_TOKEN\"\n    - ./deploy.sh",
+        "masked": "deploy:\n  stage: deploy\n  script:\n    - export PAYMENT_TOKEN=\"$PAYMENT_TOKEN\"\n    - echo \"$PAYMENT_TOKEN\" > debug/payment.txt\n    - ./deploy.sh\n  artifacts:\n    paths:\n      - debug/",
+        "vault": "deploy:\n  id_tokens:\n    VAULT_ID_TOKEN:\n      aud: https://vault.example.com\n  secrets:\n    PAYMENT_TOKEN:\n      vault: nonprod/payments/token@ops\n      token: $VAULT_ID_TOKEN\n  script:\n    - ./deploy.sh"
+      }
+    },
+    {
+      "id": "job-log",
+      "path": "pipeline/job.log",
+      "language": "text",
+      "badge": "result",
+      "hidden": true,
+      "initialVersion": "leak",
+      "versions": {
+        "leak": "Running deploy.sh\nUploading artifacts...\ndebug/payment.txt: archived\nWARNING: simulated secret scanner found credential-like content in artifact bundle",
+        "clean": "Running deploy.sh\nDeployment validation completed\nNo credential value printed\nNo secret-bearing debug artifact published"
+      }
+    },
+    {
+      "id": "vault-review",
+      "path": "review/vault-job.yml",
+      "language": "YAML",
+      "badge": "proposal",
+      "content": "deploy:\n  id_tokens:\n    VAULT_ID_TOKEN:\n      aud: https://vault.example.com\n  secrets:\n    PAYMENT_TOKEN:\n      vault: nonprod/payments/token@ops\n      token: $VAULT_ID_TOKEN\n  script:\n    - ./deploy.sh"
+    }
+  ],
+  "variants": [
+    {
+      "id": "artifact-file",
+      "workspaceOverride": {
+        "status": "Pipeline review · artifact path under review"
+      }
+    },
+    {
+      "id": "debug-bundle",
+      "workspaceOverride": {
+        "status": "Pipeline review · debug bundle under review"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "spot-pipeline-risk",
+      "type": "select-lines",
+      "typeLabel": "Investigate",
+      "title": "Mark the unsafe pipeline lines",
+      "instruction": "Select the lines that place the simulated credential in repository configuration or job output.",
+      "visibleFiles": [
+        "pipeline"
+      ],
+      "focusFile": "pipeline",
+      "correctSelections": [
+        "pipeline:4",
+        "pipeline:5"
+      ],
+      "concept": {
+        "id": "secret-output",
+        "label": "Keep secret values out of output"
+      },
+      "hints": [
+        "One line stores the value in the pipeline file. Another sends the value to output."
+      ],
+      "feedback": {
+        "correct": "You identified the repository and output exposure paths. Now decide how the job should change.",
+        "incorrect": "Review where the value is stored and where it is printed."
+      },
+      "feedbackByMissing": {
+        "pipeline:4": "The literal is embedded in repository configuration.",
+        "pipeline:5": "The echo command exposes the credential through job output."
+      }
+    },
+    {
+      "id": "choose-pipeline-fix",
+      "type": "single-choice",
+      "typeLabel": "Decide",
+      "title": "Choose the pipeline correction",
+      "instruction": "Select the approach you would approve. One shortcut can be applied so that you can inspect its consequence.",
+      "visibleFiles": [
+        "pipeline",
+        "vault-review"
+      ],
+      "focusFile": "pipeline",
+      "correctIds": [
+        "vault"
+      ],
+      "choices": [
+        {
+          "id": "mask",
+          "label": "Move the value to a masked variable but keep a debug copy for failures",
+          "detail": "Write the value into debug/payment.txt and publish the debug directory as an artifact.",
+          "feedback": "Masking addresses some console display, but the debug file creates another durable copy."
+        },
+        {
+          "id": "vault",
+          "label": "Use the current approved workload-retrieval pattern and keep the value out of output and artifacts",
+          "detail": "The example uses a fictional GitLab ID-token and Vault path for review practice."
+        },
+        {
+          "id": "partial",
+          "label": "Print only part of the credential during validation",
+          "detail": "Use a prefix to confirm the value was loaded.",
+          "feedback": "Partial credential output still discloses secret material and normalizes printing credentials for troubleshooting."
+        }
+      ],
+      "outcomes": {
+        "mask": {
+          "kind": "consequence",
+          "advance": true,
+          "feedback": "The job completes, but the debug directory is published as an artifact. Masking did not prevent the value from being copied into a file.",
+          "effects": {
+            "fileVersions": {
+              "pipeline": "masked",
+              "job-log": "leak"
+            },
+            "unlockFiles": [
+              "job-log"
+            ],
+            "openSignals": [
+              "artifact-copy"
+            ],
+            "setState": {
+              "pipelineLeak": true
+            },
+            "workspaceStatus": "Pipeline ran · artifact finding detected"
+          }
+        }
+      },
+      "hints": [
+        "The safer choice prevents copies instead of relying on output masking."
+      ],
+      "feedback": {
+        "correct": "The approved pattern keeps the credential out of repository configuration and output while using workload identity for retrieval. Exact team roles and paths still come from current guidance.",
+        "incorrect": "That choice leaves secret material observable or durable."
+      },
+      "onCorrect": {
+        "fileVersions": {
+          "pipeline": "vault",
+          "job-log": "clean"
+        },
+        "unlockFiles": [
+          "job-log"
+        ],
+        "resolveSignals": [
+          "pipeline-source",
+          "pipeline-output"
+        ],
+        "setState": {
+          "pipelineSafe": true
+        },
+        "workspaceStatus": "Pipeline correction applied · verification required"
+      }
+    },
+    {
+      "id": "run-pipeline",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Run the simulated pipeline checks",
+      "instruction": "Inspect what the current pipeline state produces instead of assuming the change is safe.",
+      "visibleFiles": [
+        "pipeline",
+        "job-log"
+      ],
+      "focusFile": "job-log",
+      "runPrompt": "Run the simulated job and artifact checks.",
+      "checks": [
+        {
+          "label": "Repository configuration",
+          "results": [
+            {
+              "when": {
+                "key": "pipelineSafe",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "No credential literal remains in the pipeline configuration."
+            },
+            {
+              "default": true,
+              "status": "warn",
+              "message": "The literal was removed, but the replacement still needs review."
+            }
+          ]
+        },
+        {
+          "label": "Job output and artifacts",
+          "results": [
+            {
+              "when": {
+                "key": "pipelineLeak",
+                "equals": true
+              },
+              "status": "fail",
+              "message": "A debug artifact contains simulated credential material."
+            },
+            {
+              "default": true,
+              "status": "pass",
+              "message": "No simulated credential value is printed or published."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "failed": "Verification found a durable copy in a published artifact. Investigate the evidence and recover before approving the job.",
+        "passed": "The simulated checks do not show repository, output or artifact exposure in the current path."
+      }
+    },
+    {
+      "id": "diagnose-artifact",
+      "type": "multi-choice",
+      "typeLabel": "Recover",
+      "title": "Diagnose the failed pipeline and recover safely",
+      "instruction": "Select the actions that remove the exposure rather than hiding it.",
+      "when": {
+        "key": "pipelineLeak",
+        "equals": true
+      },
+      "visibleFiles": [
+        "pipeline",
+        "job-log",
+        "vault-review"
+      ],
+      "focusFile": "job-log",
+      "correctIds": [
+        "remove-copy",
+        "use-retrieval",
+        "validate"
+      ],
+      "choices": [
+        {
+          "id": "remove-copy",
+          "label": "Remove the secret-bearing debug file from the workflow",
+          "detail": "Do not use an artifact as secret transport.",
+          "feedbackIfMissed": "The debug file is the durable copy that verification detected."
+        },
+        {
+          "id": "use-retrieval",
+          "label": "Use the current approved workload-retrieval pattern",
+          "detail": "Keep the secret outside repository configuration and request only what the job needs.",
+          "feedbackIfMissed": "Removing the artifact does not solve repository storage or retrieval on its own."
+        },
+        {
+          "id": "validate",
+          "label": "Validate deployment without printing or copying the credential",
+          "detail": "Use non-secret evidence of success.",
+          "feedbackIfMissed": "Verification should confirm behaviour without exposing the credential value."
+        },
+        {
+          "id": "hide-artifact",
+          "label": "Keep the artifact but restrict who can download it",
+          "detail": "Treat access control as sufficient containment.",
+          "feedbackIfSelected": "Restricting artifact access does not remove the unnecessary secret-bearing copy."
+        }
+      ],
+      "concept": {
+        "id": "secret-output",
+        "label": "Keep secret values out of output and supporting artefacts",
+        "retrieval": true
+      },
+      "hints": [
+        "Fix the copy, the retrieval approach and the validation method."
+      ],
+      "feedback": {
+        "correct": "You recovered by removing the copy, using the approved retrieval approach and validating without displaying the credential.",
+        "incorrect": "At least one selected action still leaves a credential copy or an unsafe validation habit."
+      },
+      "onCorrect": {
+        "fileVersions": {
+          "pipeline": "vault",
+          "job-log": "clean"
+        },
+        "resolveSignals": [
+          "pipeline-source",
+          "pipeline-output",
+          "artifact-copy"
+        ],
+        "setState": {
+          "pipelineSafe": true,
+          "pipelineLeak": false,
+          "recoveredFromLeak": true
+        },
+        "workspaceStatus": "Pipeline recovered · retrieval boundary review remains"
+      }
+    },
+    {
+      "id": "review-retrieval",
+      "type": "multi-choice",
+      "typeLabel": "Review",
+      "title": "Review the external-secret retrieval boundary",
+      "instruction": "Select every check that belongs in this review. These are review criteria, not service-specific configuration instructions.",
+      "visibleFiles": [
+        "pipeline",
+        "vault-review",
+        "job-log"
+      ],
+      "focusFile": "vault-review",
+      "correctIds": [
+        "binding",
+        "least",
+        "file",
+        "no-publish",
+        "validate"
+      ],
+      "choices": [
+        {
+          "id": "binding",
+          "label": "Confirm the role is bound to the intended project and environment",
+          "feedbackIfMissed": "Workload identity still needs an appropriate authorization boundary."
+        },
+        {
+          "id": "least",
+          "label": "Request only the secret the workload needs",
+          "feedbackIfMissed": "External retrieval does not remove least-privilege requirements."
+        },
+        {
+          "id": "file",
+          "label": "Understand how the runner exposes the fetched secret to the job",
+          "feedbackIfMissed": "The job can create a new copy if the fetched value or file is handled carelessly."
+        },
+        {
+          "id": "no-publish",
+          "label": "Prevent logging, caching and artifact publication of the secret",
+          "feedbackIfMissed": "Retrieval is only one boundary; output and artifact handling still matter."
+        },
+        {
+          "id": "validate",
+          "label": "Validate deployment without printing the value",
+          "feedbackIfMissed": "Successful validation does not require exposing the credential."
+        },
+        {
+          "id": "echo",
+          "label": "Echo the value once to confirm retrieval",
+          "feedbackIfSelected": "Printing the secret turns a retrieval check into an exposure path."
+        }
+      ],
+      "concept": {
+        "id": "secret-output",
+        "label": "Keep secret values out of output and supporting artefacts",
+        "retrieval": true
+      },
+      "hints": [
+        "Review authorization, scope, runner behaviour, publication and validation."
+      ],
+      "feedback": {
+        "correct": "You reviewed the retrieval boundary without treating Vault access as automatic proof that the whole pipeline is safe.",
+        "incorrect": "One or more review checks are missing, or the selection introduces secret output."
+      },
+      "onCorrect": {
+        "resolveSignals": [
+          "retrieval-scope"
+        ],
+        "workspaceStatus": "Pipeline containment review complete"
+      }
+    }
+  ],
+  "completion": {
+    "title": "Pipeline containment complete",
+    "message": "You treated masking as a display aid rather than a containment boundary, used verification evidence and reviewed the workload-retrieval path across the whole job.",
+    "takeaways": [
+      "Prevent secret copies instead of depending on masking.",
+      "Artifacts, caches and debug files can outlive the job that created them.",
+      "Workload retrieval still requires authorization, scope and output review.",
+      "A poor decision can be used as evidence for recovery rather than as a dead end in the learning experience."
+    ]
+  },
+  "sourceBasis": [
+    "Course Draft — Lesson 3 GitLab external-secret retrieval and masking limits",
+    "Course Outline — CI/CD logs and artifacts"
+  ]
+}

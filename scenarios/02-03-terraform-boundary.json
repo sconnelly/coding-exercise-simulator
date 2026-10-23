@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 2,
+  "meta": {
+    "id": "terraform-boundary",
+    "title": "Terraform Boundary: Redacted Is Not Removed",
+    "subtitle": "Review a fictional Terraform change and distinguish display redaction from secret-storage boundaries.",
+    "role": "Infrastructure reviewer",
+    "estimatedMinutes": 6,
+    "difficulty": "Applied"
+  },
+  "mission": {
+    "eyebrow": "Mission 03 · Infrastructure review",
+    "objective": "Keep secret material out of Terraform source, shared plan artefacts and support workflows while interpreting sensitive handling accurately.",
+    "activeLabel": "Review blocked",
+    "clearLabel": "Review clear",
+    "riskSignals": [
+      {
+        "id": "source-secret",
+        "label": "Secret material in infrastructure input",
+        "initial": "open"
+      },
+      {
+        "id": "plan-persistence",
+        "label": "Secret material may persist in plan/state",
+        "initial": "open"
+      },
+      {
+        "id": "plan-sharing",
+        "label": "Plan artefact shared unsafely",
+        "initial": "open"
+      },
+      {
+        "id": "support-copy",
+        "label": "Secret-bearing output copied to support",
+        "initial": "dormant"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "boundary-thinker",
+        "icon": "◆",
+        "title": "Boundary thinker",
+        "description": "Completed without revealing a solution.",
+        "condition": {
+          "type": "no-reveals"
+        }
+      },
+      {
+        "id": "artifact-guardian",
+        "icon": "↺",
+        "title": "Artifact guardian",
+        "description": "Applied the same persistence principle when the risk reappeared in a support workflow.",
+        "condition": {
+          "type": "retrieval-wins-at-least",
+          "value": 1
+        }
+      },
+      {
+        "id": "infra-clear",
+        "icon": "✓",
+        "title": "Infrastructure review clear",
+        "description": "Resolved every open risk signal.",
+        "condition": {
+          "type": "all-risk-resolved"
+        }
+      }
+    ]
+  },
+  "brief": {
+    "role": "You are reviewing a fictional Terraform change for a payment integration.",
+    "context": "The variable is marked sensitive, and the plan UI redacts the value. Your job is to decide what that flag does and does not prove, correct the handling and prevent plan material from becoming a new support or artifact exposure.",
+    "safetyNote": "Training data only. Every credential-looking value is fictional. Never replace a placeholder with a real credential in this simulation, an AI tool, a ticket, chat, email, log, screenshot or support message."
+  },
+  "workspace": {
+    "title": "Merge request !407 · payments-infra",
+    "status": "Terraform review in progress"
+  },
+  "initialState": {
+    "terraformCorrected": false
+  },
+  "files": [
+    {
+      "id": "variables",
+      "path": "variables.tf",
+      "language": "HCL",
+      "badge": "changed",
+      "initialVersion": "unsafe",
+      "versions": {
+        "unsafe": "variable \"payments_token\" {\n  type      = string\n  sensitive = true\n}\n\nlocals {\n  deployment_token = var.payments_token\n}",
+        "safe": "# Secret values are not stored in this source file.\n# Follow the current approved workload-retrieval and Terraform guidance.\n\nvariable \"payments_secret_reference\" {\n  type = string\n}"
+      }
+    },
+    {
+      "id": "plan",
+      "path": "artifacts/tfplan-summary.txt",
+      "language": "text",
+      "badge": "plan",
+      "initialVersion": "redacted",
+      "versions": {
+        "redacted": "Terraform will perform the following actions:\n\n  ~ payment_service.integration\n      token = (sensitive value)\n\nPlan: 0 to add, 1 to change, 0 to destroy.\n\nNote: UI redaction does not prove the value is absent from plan or state.",
+        "clean": "Terraform review summary:\n\nNo secret value is intentionally supplied through repository source.\nCurrent approved verification guidance must still be followed for plan and state handling."
+      }
+    },
+    {
+      "id": "support",
+      "path": "support/request-draft.txt",
+      "language": "text",
+      "badge": "draft",
+      "hidden": true,
+      "content": "Subject: Terraform authentication issue\n\nI attached tfplan.out so support can inspect the sensitive value and tell us whether it is correct."
+    }
+  ],
+  "variants": [
+    {
+      "id": "resource-change",
+      "metaOverride": {
+        "subtitle": "Review a fictional Terraform resource change and distinguish redaction from storage boundaries."
+      }
+    },
+    {
+      "id": "plan-output",
+      "workspaceOverride": {
+        "status": "Terraform review · plan artefact under review"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "id": "interpret-sensitive",
+      "type": "single-choice",
+      "typeLabel": "Interpret",
+      "title": "What does sensitive = true prove?",
+      "instruction": "Choose the most accurate interpretation of the Terraform flag in this review.",
+      "visibleFiles": [
+        "variables",
+        "plan"
+      ],
+      "focusFile": "variables",
+      "correctIds": [
+        "display"
+      ],
+      "choices": [
+        {
+          "id": "safe-store",
+          "label": "The value is securely stored and absent from plan and state",
+          "detail": "Treat the sensitive flag as a storage boundary.",
+          "feedback": "The flag controls display in some interfaces. It does not by itself prove that the value is absent from plan or state."
+        },
+        {
+          "id": "display",
+          "label": "The value may be redacted in display, but the flag alone does not prove it is absent from plan or state",
+          "detail": "Review storage, plan and state handling separately."
+        },
+        {
+          "id": "encrypted",
+          "label": "The value is automatically encrypted everywhere Terraform handles it",
+          "detail": "Assume no additional review is needed.",
+          "feedback": "Do not infer universal encryption or absence from a display label. Follow current implementation and verification guidance."
+        }
+      ],
+      "concept": {
+        "id": "persistence-boundary",
+        "label": "Display redaction is not a storage boundary"
+      },
+      "hints": [
+        "Separate what the CLI or UI shows from where the value may still exist."
+      ],
+      "feedback": {
+        "correct": "Correct. Redaction helps with display, but it is not proof that secret material is absent from plan or state.",
+        "incorrect": "The selected interpretation gives the sensitive flag more protection than it guarantees."
+      }
+    },
+    {
+      "id": "correct-infra-handling",
+      "type": "multi-choice",
+      "typeLabel": "Correct",
+      "title": "Choose the review actions that reduce exposure",
+      "instruction": "Select every action that belongs in the correction. Do not design a new secret store in this exercise.",
+      "visibleFiles": [
+        "variables",
+        "plan"
+      ],
+      "focusFile": "plan",
+      "correctIds": [
+        "remove-source",
+        "approved-pattern",
+        "protect-plan",
+        "no-output"
+      ],
+      "choices": [
+        {
+          "id": "remove-source",
+          "label": "Keep secret values out of Terraform source",
+          "feedbackIfMissed": "Repository source should not become the secret storage location."
+        },
+        {
+          "id": "approved-pattern",
+          "label": "Use the current approved retrieval and Terraform pattern for the service",
+          "feedbackIfMissed": "The course should point to the validated implementation path rather than invent one."
+        },
+        {
+          "id": "protect-plan",
+          "label": "Treat plan and state as potential secret-bearing material",
+          "feedbackIfMissed": "Redaction does not remove the need to protect plan and state handling."
+        },
+        {
+          "id": "no-output",
+          "label": "Avoid outputs, logs and support copies that expose the value",
+          "feedbackIfMissed": "A safe source file can still be undermined by downstream output."
+        },
+        {
+          "id": "attach-plan",
+          "label": "Attach the raw plan to a support request because the UI redacts sensitive values",
+          "feedbackIfSelected": "The raw plan may still contain sensitive material even when display is redacted."
+        }
+      ],
+      "hints": [
+        "Review source, retrieval, plan/state handling and downstream copies."
+      ],
+      "feedback": {
+        "correct": "The correction treats source, plan/state and downstream output as separate exposure boundaries.",
+        "incorrect": "One or more choices still assume that display redaction makes other copies safe."
+      },
+      "onCorrect": {
+        "resolveSignals": [
+          "source-secret",
+          "plan-persistence",
+          "plan-sharing"
+        ],
+        "fileVersions": {
+          "variables": "safe",
+          "plan": "clean"
+        },
+        "unlockFiles": [
+          "support"
+        ],
+        "openSignals": [
+          "support-copy"
+        ],
+        "setState": {
+          "terraformCorrected": true
+        },
+        "workspaceStatus": "Primary infrastructure correction applied · support workflow review remains"
+      }
+    },
+    {
+      "id": "run-plan-review",
+      "type": "verification",
+      "typeLabel": "Verify",
+      "title": "Run the simulated infrastructure review checks",
+      "instruction": "Verify the current design before the merge request moves forward.",
+      "visibleFiles": [
+        "variables",
+        "plan",
+        "support"
+      ],
+      "focusFile": "plan",
+      "runPrompt": "Run the simulated source and artefact checks.",
+      "checks": [
+        {
+          "label": "Repository review",
+          "results": [
+            {
+              "when": {
+                "key": "terraformCorrected",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "No simulated secret value is stored in Terraform source."
+            },
+            {
+              "default": true,
+              "status": "fail",
+              "message": "Secret material remains in infrastructure source."
+            }
+          ]
+        },
+        {
+          "label": "Plan/state handling review",
+          "results": [
+            {
+              "when": {
+                "key": "terraformCorrected",
+                "equals": true
+              },
+              "status": "pass",
+              "message": "The design treats plan and state as potential secret-bearing material and requires current verification guidance."
+            },
+            {
+              "default": true,
+              "status": "warn",
+              "message": "Plan/state handling is not yet addressed."
+            }
+          ]
+        },
+        {
+          "label": "Support workflow review",
+          "results": [
+            {
+              "status": "fail",
+              "message": "A draft support request proposes attaching a raw plan artefact for inspection."
+            }
+          ]
+        }
+      ],
+      "feedback": {
+        "failed": "The Terraform correction is stronger, but a support workflow would create another copy of potentially sensitive plan material."
+      }
+    },
+    {
+      "id": "support-recall",
+      "type": "single-choice",
+      "typeLabel": "Recall",
+      "title": "Handle the support request without moving the risk",
+      "instruction": "Choose the safest next step for the draft support request.",
+      "visibleFiles": [
+        "support",
+        "plan"
+      ],
+      "focusFile": "support",
+      "correctIds": [
+        "minimal"
+      ],
+      "choices": [
+        {
+          "id": "attach",
+          "label": "Attach the raw plan because sensitive values are redacted in the normal display",
+          "feedback": "Redacted display does not prove the raw artefact is safe to share."
+        },
+        {
+          "id": "minimal",
+          "label": "Provide a reviewed, minimal description without secret-bearing plan material and follow the approved support path",
+          "detail": "Keep the secret or potentially secret-bearing artefact out of the request."
+        },
+        {
+          "id": "screenshot",
+          "label": "Send a screenshot of the plan instead of the plan file",
+          "feedback": "A screenshot can still expose sensitive values or internal details. Review and minimize the information you share."
+        }
+      ],
+      "concept": {
+        "id": "persistence-boundary",
+        "label": "Display redaction is not a storage or sharing boundary",
+        "retrieval": true
+      },
+      "hints": [
+        "Ask whether changing the format changes the underlying information risk."
+      ],
+      "feedback": {
+        "correct": "You applied the same persistence principle to the support workflow. Changing the transport does not make secret-bearing material safe to share.",
+        "incorrect": "That action can still move potentially sensitive plan material into another system."
+      },
+      "onCorrect": {
+        "resolveSignals": [
+          "support-copy"
+        ],
+        "workspaceStatus": "Terraform review clear"
+      }
+    }
+  ],
+  "completion": {
+    "title": "Infrastructure review clear",
+    "message": "You separated display redaction from storage, plan/state and support boundaries, then applied the same principle when the risk resurfaced outside Terraform itself.",
+    "takeaways": [
+      "Terraform sensitive is not proof that a value is absent from plan or state.",
+      "Keep secret values out of infrastructure source and follow the current approved implementation pattern.",
+      "Plan files, screenshots and support attachments can become new exposure paths.",
+      "A security principle should transfer across tools and artefacts, not stay tied to one syntax example."
+    ]
+  },
+  "sourceBasis": [
+    "Course Draft — Lesson 3 Terraform sensitive behaviour and plan/state limits",
+    "Course Outline — infrastructure-as-code and downstream exposure"
+  ]
+}
